@@ -453,7 +453,8 @@ end
 function Overworld:update(dt)
   if Input.wasPressed("pause") then
     local StateManager = require("src.states.statemanager")
-    StateManager.pop()
+    local MainMenu     = require("src.states.mainmenu")
+    StateManager.replace(MainMenu)
     return
   end
 
