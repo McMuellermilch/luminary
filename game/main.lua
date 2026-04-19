@@ -15,8 +15,8 @@ function love.load()
 end
 
 function love.update(dt)
-  Input.update()
-  StateManager.update(dt)
+  StateManager.update(dt)  -- reads Input.wasPressed first
+  Input.update()           -- then clear pressed_this_frame for next frame
 end
 
 function love.draw()
