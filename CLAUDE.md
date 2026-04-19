@@ -105,7 +105,7 @@ When a phase is finished:
 1. Fetch the GitHub issue and read every item in the **Definition of Done** checklist
 2. Verify each item is actually satisfied — do not assume, check the code
 3. Fix anything that is missing before proceeding
-4. Commit all changes with a descriptive commit message referencing the phase
+4. Commit all changes with a descriptive commit message referencing the phase and tagging the issue by id (e.g. `(#3)` at the end of the subject line)
 5. Push to `origin/main`
 6. Close the corresponding GitHub issue: `gh issue close <number>`
 7. **Stop. Do not begin the next phase.** Wait for explicit instruction to continue.

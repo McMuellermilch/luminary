@@ -1,52 +1,66 @@
 -- NPC entity
--- Placeholder colored rectangle spawned from Tiled object data.
--- Registers a solid hitbox in bump so the player cannot walk through.
--- Phase 4 will replace the rectangle with a proper sprite.
+-- Inherits from Entity. Uses Physics, Animation, and Facing components.
+-- Spawned from Tiled object layer data via Overworld:_loadMap().
 
+local Entity   = require("src.entities.entity")
+local Physics  = require("src.entities.components.physics")
+local AnimComp = require("src.entities.components.animation")
+local Facing   = require("src.entities.components.facing")
+local Aseprite = require("src.core.aseprite")
 local MapManager = require("src.world.mapmanager")
 
-local NPC = {}
+local NPC = setmetatable({}, { __index = Entity })
 NPC.__index = NPC
 
-local WIDTH  = 20
-local HEIGHT = 26
+local W = 20
+local H = 26
 
--- Placeholder colour per NPC id (cycles through a small palette)
-local PALETTE = {
-  {0.40, 0.65, 0.90},  -- blue
-  {0.65, 0.90, 0.40},  -- green
-  {0.90, 0.55, 0.35},  -- orange
-  {0.80, 0.40, 0.80},  -- purple
-  {0.90, 0.80, 0.30},  -- yellow
+-- Per-NPC sprite override: if a named sprite sheet exists, use it.
+-- Otherwise fall back to npc_generic.
+local SPRITE_MAP = {
+  pip   = "assets/sprites/pip",
 }
-local _palette_index = 0
+local GENERIC_PNG  = "assets/sprites/npc_generic.png"
+local GENERIC_JSON = "assets/sprites/npc_generic.json"
 
-local function next_color()
-  _palette_index = (_palette_index % #PALETTE) + 1
-  return PALETTE[_palette_index]
+local function sprite_paths(sprite_name)
+  local s = SPRITE_MAP[sprite_name]
+  if s then
+    return s .. ".png", s .. ".json"
+  end
+  return GENERIC_PNG, GENERIC_JSON
 end
 
--- data — table from MapManager.npcs:
---   { x, y, id, sprite, dialogue, facing }
+-- data — table from MapManager.npcs: { x, y, id, sprite, dialogue, facing }
 function NPC.new(data)
-  local self = setmetatable({}, NPC)
+  -- Tiled object x/y is the top-left of the tile; centre the hitbox within it.
+  local x = data.x + (32 - W) / 2
+  local y = data.y + (32 - H) / 2
 
-  -- Centre the hitbox on the Tiled object position (top-left of tile)
-  self.x        = data.x + (32 - WIDTH)  / 2
-  self.y        = data.y + (32 - HEIGHT) / 2
-  self.w        = WIDTH
-  self.h        = HEIGHT
+  local self = Entity.new(x, y)
+  setmetatable(self, NPC)
 
-  self.id       = data.id       or "npc"
+  self.w        = W
+  self.h        = H
+  self.type     = "npc"           -- bump tag used by player interaction + collision
+  self.id       = data.id or "npc"
   self.dialogue = data.dialogue or ""
-  self.facing   = data.facing   or "down"
-  self.color    = next_color()
 
-  -- bump type tag — Player._interact() queries for this
-  self.type     = "npc"
+  -- Physics — solid hitbox in bump world
+  local phys = Physics.new(MapManager.world, W, H)
+  self:addComponent("physics", phys)
+  phys:register()
 
-  -- Register solid rectangle in the shared bump world
-  MapManager.world:add(self, self.x, self.y, self.w, self.h)
+  -- Animation
+  local png, json_path = sprite_paths(data.sprite)
+  local sprite = Aseprite.load(png, json_path)
+  local anim   = AnimComp.new(sprite.image, sprite.anims)
+  self:addComponent("animation", anim)
+
+  -- Facing — sets initial idle animation
+  local facing = Facing.new(data.facing or "down")
+  self:addComponent("facing", facing)
+  facing:set(nil, false)   -- force idle state sync
 
   return self
 end
@@ -54,50 +68,38 @@ end
 -- Called from Player:_interact() when the player faces this NPC and presses confirm.
 function NPC:onInteract(player)
   -- Turn to face the player
-  local px, py = player:center()
-  local nx, ny = self.x + self.w / 2, self.y + self.h / 2
-  local dx, dy = px - nx, py - ny
+  local phys = self:getComponent("physics")
+  local cx, cy = phys:center()
+  local pcx, pcy = player:center()
+  local dx, dy = pcx - cx, pcy - cy
 
+  local dir
   if math.abs(dx) > math.abs(dy) then
-    self.facing = dx > 0 and "right" or "left"
+    dir = dx > 0 and "right" or "left"
   else
-    self.facing = dy > 0 and "down" or "up"
+    dir = dy > 0 and "down" or "up"
   end
+  self:getComponent("facing"):forceDirection(dir)
 
-  -- Push the dialogue state if a dialogue id is set
+  -- Push dialogue state
   if self.dialogue and self.dialogue ~= "" then
-    local StateManager = require("src.states.statemanager")
+    local StateManager  = require("src.states.statemanager")
     local DialogueState = require("src.states.dialogue")
     StateManager.push(DialogueState, { dialogue_id = self.dialogue })
   end
 end
 
--- Remove this NPC from the bump world (called on map unload).
-function NPC:destroy()
-  if MapManager.world then
-    MapManager.world:remove(self)
-  end
+function NPC:update(dt)
+  self:getComponent("animation"):update(dt)
 end
 
 function NPC:draw()
-  local c = self.color
-  love.graphics.setColor(c[1], c[2], c[3], 1)
-  love.graphics.rectangle("fill", self.x, self.y, self.w, self.h, 3, 3)
+  self:getComponent("animation"):draw()
+end
 
-  -- Direction dot
-  love.graphics.setColor(0.1, 0.1, 0.1, 1)
-  local cx = self.x + self.w / 2
-  local cy_center = self.y + self.h / 2
-  local offsets = {
-    up    = {0, -7},
-    down  = {0,  7},
-    left  = {-7, 0},
-    right = { 7, 0},
-  }
-  local off = offsets[self.facing]
-  love.graphics.circle("fill", cx + off[1], cy_center + off[2], 2.5)
-
-  love.graphics.setColor(1, 1, 1, 1)
+function NPC:destroy()
+  self:getComponent("physics"):unregister()
+  Entity.destroy(self)
 end
 
 return NPC

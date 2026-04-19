@@ -1,30 +1,26 @@
--- Player entity (Phase 2 stub)
--- Coloured rectangle with 4-directional movement and bump.lua collision.
--- Phase 4 will replace this with the full Entity + component system.
+-- Player entity
+-- Inherits from Entity. Uses Physics, Animation, Facing, and Health components.
+-- Phase 5 will wire Health into the combat system.
 
-local Input      = require("src.core.input")
+local Entity    = require("src.entities.entity")
+local Physics   = require("src.entities.components.physics")
+local AnimComp  = require("src.entities.components.animation")
+local Facing    = require("src.entities.components.facing")
+local Health    = require("src.entities.components.health")
+local Aseprite  = require("src.core.aseprite")
+local Input     = require("src.core.input")
 local MapManager = require("src.world.mapmanager")
 
-local Player = {}
+local Player = setmetatable({}, { __index = Entity })
 Player.__index = Player
 
-local SPEED     = 120   -- pixels per second
-local WIDTH     = 20    -- hitbox width (slightly smaller than tile)
-local HEIGHT    = 26    -- hitbox height
-local TILE      = 32    -- tile size
+local SPEED  = 120   -- pixels per second
+local W      = 20    -- hitbox width
+local H      = 26    -- hitbox height
+local TILE   = 32
 
--- Colours per facing direction (placeholder art)
-local COLORS = {
-  down  = {0.95, 0.75, 0.35},
-  up    = {0.85, 0.65, 0.25},
-  left  = {0.90, 0.70, 0.30},
-  right = {0.90, 0.70, 0.30},
-}
-
--- bump.lua collision filter:
---   "slide"  — stop and slide along walls
---   "cross"  — pass through but register the collision (triggers)
-local function collisionFilter(item, other)
+-- Collision filter: slide against walls and NPCs; cross everything else
+local function collision_filter(item, other)
   if other.type == "wall" or other.type == "npc" then
     return "slide"
   end
@@ -32,65 +28,90 @@ local function collisionFilter(item, other)
 end
 
 function Player.new(x, y)
-  local self = setmetatable({}, Player)
-  self.x       = x
-  self.y       = y
-  self.w       = WIDTH
-  self.h       = HEIGHT
-  self.facing  = "down"
-  self.moving  = false
+  local self = Entity.new(x, y)
+  setmetatable(self, Player)
 
-  -- Register with bump world
-  MapManager.world:add(self, self.x, self.y, self.w, self.h)
+  -- Hitbox size (needed by EntityManager depth sort and WarpSystem)
+  self.w    = W
+  self.h    = H
+  self.type = "player"
+
+  -- Physics — manages bump registration and movement
+  local phys = Physics.new(MapManager.world, W, H)
+  self:addComponent("physics", phys)
+  phys:register()
+
+  -- Animation — loaded from Aseprite JSON
+  local sprite = Aseprite.load("assets/sprites/luma.png", "assets/sprites/luma.json")
+  local anim   = AnimComp.new(sprite.image, sprite.anims)
+  self:addComponent("animation", anim)
+
+  -- Facing — syncs animation state automatically
+  local facing = Facing.new("down")
+  self:addComponent("facing", facing)
+
+  -- Health — Luma's HP (used in Phase 5 combat)
+  self:addComponent("health", Health.new(10))
 
   return self
 end
 
 function Player:update(dt)
   local dx, dy = 0, 0
+  local dir    = nil
 
-  -- Only one axis at a time (4-directional, no diagonal)
-  if Input.isDown("move_up") then
-    dy = -1; self.facing = "up"
-  elseif Input.isDown("move_down") then
-    dy =  1; self.facing = "down"
-  elseif Input.isDown("move_left") then
-    dx = -1; self.facing = "left"
-  elseif Input.isDown("move_right") then
-    dx =  1; self.facing = "right"
+  if     Input.isDown("move_up")    then dy = -1; dir = "up"
+  elseif Input.isDown("move_down")  then dy =  1; dir = "down"
+  elseif Input.isDown("move_left")  then dx = -1; dir = "left"
+  elseif Input.isDown("move_right") then dx =  1; dir = "right"
   end
 
-  self.moving = (dx ~= 0 or dy ~= 0)
+  local moving = (dx ~= 0 or dy ~= 0)
 
-  if self.moving then
-    local nx = self.x + dx * SPEED * dt
-    local ny = self.y + dy * SPEED * dt
+  -- Update facing + animation before moving so the frame is correct this frame
+  self:getComponent("facing"):set(dir, moving)
 
-    local actualX, actualY = MapManager.world:move(self, nx, ny, collisionFilter)
-    self.x = actualX
-    self.y = actualY
+  if moving then
+    self:getComponent("physics"):move(dx * SPEED * dt, dy * SPEED * dt, collision_filter)
   end
 
-  -- Interaction check: press confirm to interact with what's ahead
+  -- Update animation clock
+  self:getComponent("animation"):update(dt)
+
+  -- Interaction
   if Input.wasPressed("confirm") then
     self:_interact()
   end
 end
 
--- Returns the world-space rectangle of the tile directly in front of the player.
+function Player:draw()
+  self:getComponent("animation"):draw()
+end
+
+-- Returns the world-space centre of the player (used by camera and WarpSystem).
+function Player:center()
+  return self:getComponent("physics"):center()
+end
+
+-- Returns the facing direction string (used by debug HUD).
+function Player:getFacing()
+  return self:getComponent("facing").direction
+end
+
+-- World-space rectangle of the tile directly in front of the player.
 function Player:_interactionRect()
+  local facing = self:getComponent("facing").direction
   local ix, iy = self.x, self.y
-  if     self.facing == "up"    then iy = iy - TILE
-  elseif self.facing == "down"  then iy = iy + self.h
-  elseif self.facing == "left"  then ix = ix - TILE
-  elseif self.facing == "right" then ix = ix + self.w
+  if     facing == "up"    then iy = iy - TILE
+  elseif facing == "down"  then iy = iy + self.h
+  elseif facing == "left"  then ix = ix - TILE
+  elseif facing == "right" then ix = ix + self.w
   end
   return ix, iy, TILE, TILE
 end
 
 function Player:_interact()
   local ix, iy, iw, ih = self:_interactionRect()
-  -- Query bump for anything in the interaction rectangle
   local items = MapManager.world:queryRect(ix, iy, iw, ih)
   for _, item in ipairs(items) do
     if item.type == "npc" and item.onInteract then
@@ -100,31 +121,10 @@ function Player:_interact()
   end
 end
 
-function Player:draw()
-  -- Placeholder: draw a coloured rectangle with a direction indicator
-  local c = COLORS[self.facing]
-  love.graphics.setColor(c[1], c[2], c[3], 1)
-  love.graphics.rectangle("fill", self.x, self.y, self.w, self.h, 3, 3)
-
-  -- Direction dot
-  love.graphics.setColor(0.2, 0.15, 0.05, 1)
-  local dot_size = 5
-  local cx, cy = self.x + self.w/2, self.y + self.h/2
-  local dot_offsets = {
-    up    = {0, -7},
-    down  = {0,  7},
-    left  = {-7, 0},
-    right = { 7, 0},
-  }
-  local off = dot_offsets[self.facing]
-  love.graphics.circle("fill", cx + off[1], cy + off[2], dot_size/2)
-
-  love.graphics.setColor(1, 1, 1, 1)
-end
-
--- Centre of the player sprite (used by camera follow).
-function Player:center()
-  return self.x + self.w / 2, self.y + self.h / 2
+-- Remove from bump world (call before map unload).
+function Player:destroy()
+  self:getComponent("physics"):unregister()
+  Entity.destroy(self)
 end
 
 return Player
