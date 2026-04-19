@@ -99,6 +99,14 @@ Run from the repository root. Requires Love2D 11.x installed.
 
 ---
 
+## Phase Completion Workflow
+
+When a phase is finished:
+1. Commit all changes with a descriptive commit message referencing the phase
+2. Push to `origin/main`
+3. Close the corresponding GitHub issue: `gh issue close <number>`
+4. **Stop. Do not begin the next phase.** Wait for explicit instruction to continue.
+
 ## Never Do
 
 - Do not run Love2D builds. Stop and tell the user to run `love game` themselves.
@@ -106,3 +114,4 @@ Run from the repository root. Requires Love2D 11.x installed.
 - Do not put game data (numbers, strings, creature definitions) directly in logic files.
 - Do not use global variables.
 - Do not introduce an ECS framework — use the component mixin pattern.
+- Do not begin a new phase without being explicitly asked to do so.
