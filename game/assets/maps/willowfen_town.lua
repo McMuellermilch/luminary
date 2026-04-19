@@ -195,7 +195,7 @@ return {
           properties = {
             id       = "elder_cerin",
             sprite   = "cerin",
-            dialogue = "cerin_intro",
+            dialogue = "cerin_post_beacon",
             facing   = "down",
           }
         },
@@ -208,7 +208,7 @@ return {
           properties = {
             id       = "mira",
             sprite   = "mira",
-            dialogue = "mira_greeting",
+            dialogue = "mira_after_beacon",
             facing   = "left",
           }
         },

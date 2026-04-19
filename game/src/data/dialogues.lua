@@ -40,6 +40,49 @@ local dialogues = {
     { speaker = "Guard", portrait = "guard", text = "Don't go in unless you're ready. The shadows have been strange lately." },
   },
 
+  -- Fisherman NPC at Willowfen Marsh
+  fisherman_dark = {
+    { speaker = "Fisherman", portrait = "npc_generic", text = "Can't catch a thing with the marsh so dark. The light usually draws the fish." },
+    { speaker = "Fisherman", portrait = "npc_generic", text = "They say something foul lurks in the old dungeon beyond the reeds. I stay well clear." },
+  },
+  fisherman_lit = {
+    requires = "willowfen_beacon_lit",
+    fallback = "fisherman_dark",
+    { speaker = "Fisherman", portrait = "npc_generic", text = "The light's back! Already catching twice as many Gleamfins." },
+    { speaker = "Fisherman", portrait = "npc_generic", text = "Whatever was haunting that dungeon — you sorted it, didn't you? Cheers to you, Light-Carrier." },
+  },
+
+  -- Murk Boss intro (shown when player enters the boss room)
+  murk_intro = {
+    { speaker = "...", portrait = "", text = "The air thickens. A vast shadow coils at the heart of the dungeon." },
+    { speaker = "The Murk", portrait = "", text = "Another spark... come to flicker and fade." },
+    { speaker = "Luma", portrait = "", text = "Not today." },
+  },
+
+  -- Beacon Shard obtained (shown after The Murk is defeated)
+  shard_obtained = {
+    sets_flag = "willowfen_shard_obtained",
+    { speaker = "...", portrait = "", text = "The Murk dissolves into cold mist. A crystalline shard tumbles to the ground." },
+    { speaker = "...", portrait = "", text = "It pulses with warm light — the piece torn from the Willowfen Beacon Tower." },
+    { speaker = "Luma", portrait = "", text = "Obtained the Willowfen Shard." },
+  },
+
+  -- Beacon use shard (shown at tower if player has shard)
+  beacon_use_shard = {
+    requires = "willowfen_shard_obtained",
+    fallback = "beacon_tower_no_shard",
+    { speaker = "Beacon Tower", portrait = "", text = "The shard resonates with the Tower's cradle. Insert it?" },
+  },
+
+  -- Cerin after the beacon is lit
+  cerin_post_beacon = {
+    requires = "willowfen_beacon_lit",
+    fallback = "cerin_beacon",
+    { speaker = "Elder Cerin", portrait = "cerin", text = "You did it, Luma. The Beacon burns again." },
+    { speaker = "Elder Cerin", portrait = "cerin", text = "Willowfen will be safe now. But the dark reaches far beyond our marsh." },
+    { speaker = "Elder Cerin", portrait = "cerin", text = "Wherever the next Beacon sleeps — you will find it." },
+  },
+
   -- Wild Lumin flavour
   wild_lumin_anxious = {
     { speaker = "...", portrait = "", text = "The Lumin shivers and skitters away from you. The darkness has made it wary." },

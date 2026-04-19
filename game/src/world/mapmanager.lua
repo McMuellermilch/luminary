@@ -29,6 +29,8 @@ MapManager.enemies       = {}
 MapManager.beacon_towers = {}   -- { x, y } world positions
 MapManager.lighthouses   = {}   -- { x, y } world positions
 MapManager.wild_lumins   = {}   -- { x, y, creature_id }
+MapManager.chests        = {}   -- { x, y, w, h, item, count, id }
+MapManager.boss_triggers = {}   -- { x, y, w, h, boss_id, spawn_x, spawn_y }
 MapManager.region        = nil  -- region id from map-level properties
 
 -- Internal list of bump items representing wall tiles (for cleanup on unload).
@@ -49,6 +51,8 @@ function MapManager.load(map_path, spawn_id)
   MapManager.beacon_towers = {}
   MapManager.lighthouses   = {}
   MapManager.wild_lumins   = {}
+  MapManager.chests        = {}
+  MapManager.boss_triggers = {}
   MapManager.region        = nil
 
   -- Reset bump world
@@ -159,6 +163,26 @@ function MapManager._parseObjects(map)
         x           = obj.x,
         y           = obj.y,
         creature_id = props.creature_id or "gleamfin",
+      }
+
+    elseif obj.type == "chest" then
+      MapManager.chests[#MapManager.chests + 1] = {
+        x     = obj.x, y = obj.y,
+        w     = obj.width  or 32,
+        h     = obj.height or 32,
+        item  = props.item,
+        count = tonumber(props.count) or 1,
+        id    = props.id or ("chest_" .. obj.id),
+      }
+
+    elseif obj.type == "boss_trigger" then
+      MapManager.boss_triggers[#MapManager.boss_triggers + 1] = {
+        x       = obj.x, y = obj.y,
+        w       = obj.width  or 64,
+        h       = obj.height or 64,
+        boss_id = props.boss_id or "murk_boss",
+        spawn_x = tonumber(props.spawn_x),
+        spawn_y = tonumber(props.spawn_y),
       }
     end
   end

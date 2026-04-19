@@ -268,6 +268,124 @@ return {
   },
 
   -- -----------------------------------------------------------------------
+  -- Twycandl — Tide-type candle sprite, Willowfen dungeon
+  -- -----------------------------------------------------------------------
+  twycandl = {
+    id   = "twycandl",
+    name = "Twycandl",
+    type = "tide",
+    description = "A flicker of marsh-light shaped like a tiny candle flame.",
+
+    base_hp  = 25,  base_atk = 13,  base_def = 8,   base_spd = 15,
+    hp_growth = 3,  atk_growth = 2, def_growth = 1, spd_growth = 2,
+
+    moves = {
+      { level = 1, move = "water_flick" },
+      { level = 5, move = "tidal_rush"  },
+    },
+
+    evolves_to = nil,
+
+    exp_yield          = 14,
+    capture_difficulty = 2,
+
+    sprite_png  = "assets/sprites/npc_generic.png",
+    sprite_json = "assets/sprites/npc_generic.json",
+
+    speed          = 65,
+    aggro_range    = 95,
+    attack_range   = 30,
+    attack_cooldown = 1.7,
+  },
+
+  -- -----------------------------------------------------------------------
+  -- Crystick — Verdant-type crystal shard creature, Willowfen dungeon
+  -- -----------------------------------------------------------------------
+  crystick = {
+    id   = "crystick",
+    name = "Crystick",
+    type = "verdant",
+    description = "A shard of crystallised moss-light with a bad temper.",
+
+    base_hp  = 38,  base_atk = 12,  base_def = 16,  base_spd = 8,
+    hp_growth = 5,  atk_growth = 2, def_growth = 3, spd_growth = 1,
+
+    moves = {
+      { level = 1, move = "leaf_tap"  },
+      { level = 5, move = "root_bind" },
+    },
+
+    evolves_to = nil,
+
+    exp_yield          = 16,
+    capture_difficulty = 2,
+
+    sprite_png  = "assets/sprites/npc_generic.png",
+    sprite_json = "assets/sprites/npc_generic.json",
+
+    speed          = 42,
+    aggro_range    = 80,
+    attack_range   = 32,
+    attack_cooldown = 2.2,
+  },
+
+  -- -----------------------------------------------------------------------
+  -- Murk Spawn — Dusk-type minion enemy, Willowfen dungeon (boss room)
+  -- -----------------------------------------------------------------------
+  murk_spawn = {
+    id   = "murk_spawn",
+    name = "Murk Spawn",
+    type = "dusk",
+    description = "A shard of the Murk's shadow given fragile form.",
+
+    base_hp  = 30,  base_atk = 11,  base_def = 8,   base_spd = 14,
+    hp_growth = 4,  atk_growth = 2, def_growth = 1, spd_growth = 2,
+
+    moves = { { level = 1, move = "shadow_tap" } },
+
+    evolves_to = nil,
+
+    exp_yield          = 12,
+    capture_difficulty = 5,
+
+    sprite_png  = "assets/sprites/npc_generic.png",
+    sprite_json = "assets/sprites/npc_generic.json",
+
+    speed          = 70,
+    aggro_range    = 120,
+    attack_range   = 32,
+    attack_cooldown = 1.8,
+  },
+
+  -- -----------------------------------------------------------------------
+  -- Murk Boss — Dusk-type dungeon boss, Willowfen dungeon
+  -- -----------------------------------------------------------------------
+  murk_boss = {
+    id   = "murk_boss",
+    name = "The Murk",
+    type = "dusk",
+    description = "A vast shadow-entity that has smothered the Willowfen Beacon.",
+
+    base_hp  = 180, base_atk = 14,  base_def = 8,   base_spd = 5,
+    hp_growth = 0,  atk_growth = 0, def_growth = 0, spd_growth = 0,
+
+    moves = { { level = 1, move = "shadow_tap" } },
+
+    evolves_to = nil,
+
+    exp_yield          = 0,   -- bosses dissolve, no EXP
+    capture_difficulty = 10,
+
+    sprite_png  = "assets/sprites/npc_generic.png",
+    sprite_json = "assets/sprites/npc_generic.json",
+
+    speed          = 45,
+    aggro_range    = 256,
+    attack_range   = 80,
+    attack_cooldown = 1.2,
+  },
+
+  -- -----------------------------------------------------------------------
   -- Bogsprite — enemy-only Dusk creature, Willowfen dungeon
   -- -----------------------------------------------------------------------
   bogsprite = {

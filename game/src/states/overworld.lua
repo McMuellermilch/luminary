@@ -24,6 +24,7 @@ local SFX            = require("src.audio.sfx")
 local SaveManager    = require("src.save.savemanager")
 local CombatHUD      = require("src.ui.combathud")
 local HUD            = require("src.ui.hud")
+local MurkAI         = require("src.combat.murkai")
 
 local Overworld = {}
 Overworld.__index = Overworld
@@ -125,6 +126,27 @@ function Overworld:_loadMap(map_path, spawn_id)
   self._beacon_towers = MapManager.beacon_towers
   self._lighthouses   = MapManager.lighthouses
 
+  -- Load chest data (preserve opened state across reloads if same map)
+  self._chests = {}
+  for _, c in ipairs(MapManager.chests) do
+    self._chests[#self._chests + 1] = {
+      x = c.x, y = c.y, w = c.w, h = c.h,
+      item = c.item, count = c.count, id = c.id,
+      opened = false,
+    }
+  end
+
+  -- Load boss trigger data
+  self._boss_triggers = {}
+  for _, bt in ipairs(MapManager.boss_triggers) do
+    self._boss_triggers[#self._boss_triggers + 1] = {
+      x = bt.x, y = bt.y, w = bt.w, h = bt.h,
+      boss_id = bt.boss_id,
+      spawn_x = bt.spawn_x,
+      spawn_y = bt.spawn_y,
+    }
+  end
+
   return spawn
 end
 
@@ -166,6 +188,13 @@ function Overworld:enter(params)
   -- Light Meter: 0.0–1.0, fills on hits, drains on damage
   self._light_meter = 0
 
+  -- Boss state
+  self._murk_boss    = nil    -- set to the Enemy entity when boss is spawned
+  self._boss_defeated = false  -- prevents double shard award
+
+  -- Generic popup (chest found, etc.)
+  self._popup = nil  -- { msg, timer }
+
   -- Darkness shader (lazily loaded)
   self._dark_shader = nil
 
@@ -204,6 +233,11 @@ function Overworld:_reload(map_path, spawn_id)
   -- Reset lighthouse prompt and light meter on map change
   self._lighthouse_prompt = nil
   self._light_meter       = self._light_meter or 0  -- preserve meter across warps
+
+  -- Reset boss and chest state on map change
+  self._murk_boss    = nil
+  self._boss_defeated = false
+  self._popup         = nil
 
   WarpSystem.reset()
 end
@@ -256,6 +290,14 @@ function Overworld:_resolveHitboxes()
                 exp_yield   = enemy.exp_yield   or 0,
                 loot_lumens = enemy.loot_lumens or 5,
               })
+              -- Boss defeat: award the Willowfen Beacon Shard
+              if enemy == self._murk_boss and not self._boss_defeated then
+                self._boss_defeated = true
+                Inventory.add("beacon_shard_willowfen")
+                local SM  = require("src.states.statemanager")
+                local Dlg = require("src.states.dialogue")
+                SM.push(Dlg, { dialogue_id = "shard_obtained" })
+              end
               enemy:destroy()
               -- Return to overworld mix if no live enemies remain
               local any_alive = false
@@ -290,6 +332,14 @@ function Overworld:_resolveHitboxes()
         ph:damage(damage)
         if active then active.hp = math.max(0, active.hp - damage) end
         self._light_meter = math.max(0.0, self._light_meter - 0.22)  -- drain on damage
+        -- Apply knockback to player (e.g. Tidal Pull from boss phase 3)
+        if (hb.kbx or 0) ~= 0 or (hb.kby or 0) ~= 0 then
+          local pphys = self.player:getComponent("physics")
+          if pphys then
+            pphys:move(hb.kbx, hb.kby,
+              function(_, other) return other.type == "wall" and "slide" or "cross" end)
+          end
+        end
         self:_addFlash(self.player.x + self.player.w/2,
                        self.player.y + self.player.h/2)
         self._hit_pause = HIT_PAUSE_FRAMES
@@ -315,6 +365,65 @@ function Overworld:_getDarkShader()
     self._dark_shader = love.graphics.newShader("assets/shaders/darkness.glsl")
   end
   return self._dark_shader
+end
+
+-- -------------------------------------------------------------------------
+-- Try to open a nearby chest. Returns true if handled.
+-- -------------------------------------------------------------------------
+function Overworld:_tryChestInteract()
+  local pcx, pcy = self.player:center()
+  for _, chest in ipairs(self._chests or {}) do
+    if not chest.opened then
+      local cx = chest.x + (chest.w or 32) / 2
+      local cy = chest.y + (chest.h or 32) / 2
+      if math.abs(cx - pcx) < 48 and math.abs(cy - pcy) < 48 then
+        chest.opened = true
+        local item_def = chest.item and Items[chest.item]
+        if item_def then
+          Inventory.add(chest.item, chest.count or 1)
+          local qty = (chest.count or 1)
+          self._popup = {
+            msg   = "Found " .. qty .. "\xC3\x97 " .. item_def.name .. "!",
+            timer = 2.2,
+          }
+        end
+        SFX.play("menu_select")
+        return true
+      end
+    end
+  end
+  return false
+end
+
+-- -------------------------------------------------------------------------
+-- Check whether the player has entered a boss trigger zone; spawn boss once.
+-- -------------------------------------------------------------------------
+function Overworld:_checkBossTriggers()
+  if self._murk_boss then return end  -- already spawned
+  local pcx, pcy = self.player:center()
+  for _, trigger in ipairs(self._boss_triggers or {}) do
+    if overlaps(pcx - 8, pcy - 8, 16, 16,
+                trigger.x, trigger.y, trigger.w, trigger.h) then
+      -- Spawn the boss entity
+      local boss = Enemy.new({
+        x           = trigger.spawn_x or (trigger.x + trigger.w / 2 - 16),
+        y           = trigger.spawn_y or (trigger.y + trigger.h / 2 - 16),
+        creature_id = trigger.boss_id or "murk_boss",
+        patrol_radius = 256,
+        is_boss     = true,
+      })
+      MurkAI.init(boss)
+      EntityManager.add(boss)
+      self._enemies[#self._enemies + 1] = boss
+      self._murk_boss = boss
+      -- Boss intro dialogue (world freezes while dialogue is open)
+      local SM  = require("src.states.statemanager")
+      local Dlg = require("src.states.dialogue")
+      SM.push(Dlg, { dialogue_id = "murk_intro" })
+      MusicManager.setContext("combat")
+      break
+    end
+  end
 end
 
 -- -------------------------------------------------------------------------
@@ -532,10 +641,12 @@ function Overworld:update(dt)
     SFX.play("menu_select")  -- placeholder until radiance_burst SFX exists
   end
 
-  -- Beacon tower / lighthouse interactions (only one fires per confirm press)
+  -- Beacon tower / lighthouse / chest interactions (only one fires per confirm press)
   if Input.wasPressed("confirm") then
     if not self:_tryBeaconInteract() then
-      self:_tryLighthouseInteract()
+      if not self:_tryLighthouseInteract() then
+        self:_tryChestInteract()
+      end
     end
   end
 
@@ -551,6 +662,15 @@ function Overworld:update(dt)
     end
   end
 
+  -- Boss trigger check (every frame, before entity updates)
+  self:_checkBossTriggers()
+
+  -- Popup countdown
+  if self._popup then
+    self._popup.timer = self._popup.timer - dt
+    if self._popup.timer <= 0 then self._popup = nil end
+  end
+
   MapManager.update(dt)
   EntityManager.update(dt)   -- player + NPCs + enemies (animations)
 
@@ -559,7 +679,12 @@ function Overworld:update(dt)
     if enemy.active then
       local eh = enemy:getComponent("health")
       if not eh:isDead() then
-        local hb = EnemyAI.update(enemy, self.player, dt)
+        local hb
+        if enemy == self._murk_boss then
+          hb = MurkAI.update(enemy, self.player, dt)
+        else
+          hb = EnemyAI.update(enemy, self.player, dt)
+        end
         if hb then self._enemy_hitboxes[#self._enemy_hitboxes+1] = hb end
       end
     end
@@ -598,6 +723,22 @@ function Overworld:draw()
   self.camera:attach()
     MapManager.drawBelow()
     EntityManager.draw()   -- player + NPCs + enemies, Y-sorted
+    -- Draw chests (world space)
+    for _, chest in ipairs(self._chests or {}) do
+      local cw = (chest.w or 32) - 8
+      local ch = (chest.h or 32) - 8
+      if chest.opened then
+        love.graphics.setColor(0.40, 0.35, 0.25, 0.7)
+      else
+        love.graphics.setColor(0.82, 0.68, 0.18, 0.95)
+      end
+      love.graphics.rectangle("fill", chest.x + 4, chest.y + 4, cw, ch, 3, 3)
+      love.graphics.setColor(chest.opened and 0.30 or 0.55,
+                             chest.opened and 0.25 or 0.45,
+                             chest.opened and 0.18 or 0.14, 0.85)
+      love.graphics.setLineWidth(1)
+      love.graphics.rectangle("line", chest.x + 4, chest.y + 4, cw, ch, 3, 3)
+    end
     -- Hit flashes (in world space, inside camera)
     love.graphics.setColor(1, 1, 1, 0.88)
     for _, f in ipairs(self._hit_flashes) do
@@ -656,6 +797,22 @@ function Overworld:draw()
       love.graphics.setColor(0.95, 0.92, 0.88, 1)
       love.graphics.printf("Save your journey here?  [Z = Yes   X = No]", bx, by + 19, box_w, "center")
     end
+  end
+
+  -- Generic popup (chest found, etc.)
+  if self._popup then
+    local sw, sh = love.graphics.getDimensions()
+    local pw, ph = 360, 38
+    local ppx = math.floor((sw - pw) / 2)
+    local ppy = math.floor(sh * 0.44)
+    love.graphics.setColor(0.06, 0.10, 0.04, 0.92)
+    love.graphics.rectangle("fill", ppx, ppy, pw, ph, 5, 5)
+    love.graphics.setColor(0.65, 0.92, 0.38, 0.9)
+    love.graphics.setLineWidth(1)
+    love.graphics.rectangle("line", ppx, ppy, pw, ph, 5, 5)
+    love.graphics.setFont(get_debug_font())
+    love.graphics.setColor(0.95, 0.92, 0.82, 1)
+    love.graphics.printf(self._popup.msg, ppx, ppy + 12, pw, "center")
   end
 
   -- Overworld HUD: party strip (top-right)

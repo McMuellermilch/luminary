@@ -203,14 +203,14 @@ return {
             target_spawn = "from_marsh",
           }
         },
-        -- Warp: east → willowfen_dungeon_entrance (gap at right, row 9-10)
+        -- Warp: east → willowfen_dungeon_01 (gap at right, row 9-10)
         {
           id = 5, name = "", type = "warp",
           shape = "rectangle",
           x = 768, y = 256, width = 32, height = 64,
           rotation = 0, visible = true,
           properties = {
-            target_map   = "assets/maps/willowfen_dungeon_entrance.lua",
+            target_map   = "assets/maps/willowfen_dungeon_01.lua",
             target_spawn = "from_marsh",
           }
         },
@@ -235,6 +235,27 @@ return {
           x = 544, y = 160, width = 32, height = 32,
           rotation = 0, visible = true,
           properties = { creature_id = "gleamfin", patrol_radius = 80 }
+        },
+        -- Fisherman NPC near the east path (col 20, row 5 → x=608, y=128)
+        {
+          id = 6, name = "fisherman", type = "npc",
+          shape = "rectangle",
+          x = 608, y = 128, width = 32, height = 32,
+          rotation = 0, visible = true,
+          properties = {
+            id       = "fisherman",
+            sprite   = "assets/sprites/npc_generic.png",
+            dialogue = "fisherman_lit",
+            facing   = "down",
+          }
+        },
+        -- Encounter zone: central marsh grass (cols 4-20, rows 3-17)
+        {
+          id = 12, name = "enc_marsh_grass", type = "encounter",
+          shape = "rectangle",
+          x = 96, y = 64, width = 512, height = 384,
+          rotation = 0, visible = true,
+          properties = { ["table"] = "willowfen_marsh" }
         },
         -- Wild lumins (ambient, non-hostile)
         {
