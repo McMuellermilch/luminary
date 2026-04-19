@@ -2,6 +2,7 @@
 -- Shows the game title and waits for the player to press Enter/Z.
 
 local Input = require("src.core.input")
+local SFX   = require("src.audio.sfx")
 
 local MainMenu = {}
 MainMenu.__index = MainMenu
@@ -19,6 +20,7 @@ function MainMenu:update(dt)
   self.pulse_timer = self.pulse_timer + dt
 
   if Input.wasPressed("confirm") then
+    SFX.play("menu_select")
     local StateManager = require("src.states.statemanager")
     local Overworld    = require("src.states.overworld")
     StateManager.push(Overworld)

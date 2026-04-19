@@ -10,6 +10,7 @@
 --   tower_y    — world-space Y of the tower tile top-left
 
 local RegionState = require("src.world.regionstate")
+local SFX         = require("src.audio.sfx")
 
 local BeaconRekindleState = {}
 BeaconRekindleState.__index = BeaconRekindleState
@@ -52,6 +53,7 @@ function BeaconRekindleState:update(dt)
   if not self.rekindled and self.timer >= REKINDLE_AT then
     self.rekindled = true
     RegionState.rekindle(self.region_id)
+    SFX.play("beacon_rekindle")
     self.overworld.camera:shake(7, 0.5)
   end
 

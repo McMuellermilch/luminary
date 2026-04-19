@@ -11,6 +11,8 @@
 --   box:skip()                           -- instantly show full text
 --   box:isComplete() → bool             -- true when all chars shown
 
+local SFX = require("src.audio.sfx")
+
 local Dialogue = {}
 Dialogue.__index = Dialogue
 
@@ -56,20 +58,40 @@ local function ensure_fonts()
   end
 end
 
+-- Speaker → blip pitch mapping
+local SPEAKER_PITCH = {
+  ["Elder Cerin"] = 0.75,
+  ["Mira"]        = 1.10,
+  ["Lumin"]       = 1.30,
+}
+local DEFAULT_PITCH = 1.0
+
+-- Blip fires at most every N characters to avoid rapid-fire noise
+local BLIP_INTERVAL = 3
+
 function Dialogue.new(line)
   local self = setmetatable({}, Dialogue)
-  self.speaker  = line.speaker  or ""
-  self.text     = line.text     or ""
-  self._len     = utf8_len(self.text)  -- character count, not byte count
-  self.revealed = 0              -- number of UTF-8 characters currently shown
-  self.elapsed  = 0
+  self.speaker       = line.speaker  or ""
+  self.text          = line.text     or ""
+  self._len          = utf8_len(self.text)  -- character count, not byte count
+  self.revealed      = 0              -- number of UTF-8 characters currently shown
+  self.elapsed       = 0
+  self._blip_pitch   = SPEAKER_PITCH[self.speaker] or DEFAULT_PITCH
+  self._last_blip_at = 0              -- revealed count at last blip
   return self
 end
 
 function Dialogue:update(dt)
   if self.revealed < self._len then
-    self.elapsed  = self.elapsed + dt
-    self.revealed = math.min(self._len, math.floor(self.elapsed * CHARS_PER_SEC))
+    self.elapsed       = self.elapsed + dt
+    local prev         = self.revealed
+    self.revealed      = math.min(self._len, math.floor(self.elapsed * CHARS_PER_SEC))
+    -- Fire blip whenever enough new characters have appeared
+    if self.revealed > prev and
+       (self.revealed - self._last_blip_at) >= BLIP_INTERVAL then
+      self._last_blip_at = self.revealed
+      SFX.playBlip(self._blip_pitch)
+    end
   end
 end
 

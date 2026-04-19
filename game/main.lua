@@ -1,20 +1,26 @@
 -- Luminary — main.lua
 -- Entry point. Wires Love2D callbacks to the StateManager.
 
-local StateManager = require("src.states.statemanager")
-local Input        = require("src.core.input")
-local Events       = require("src.core.events")
-local MainMenu     = require("src.states.mainmenu")
+local StateManager   = require("src.states.statemanager")
+local Input          = require("src.core.input")
+local Events         = require("src.core.events")
+local MainMenu       = require("src.states.mainmenu")
+local MusicManager   = require("src.audio.musicmanager")
+local SFX            = require("src.audio.sfx")
 
 function love.load()
   -- Pixel-art rendering defaults
   love.graphics.setDefaultFilter("nearest", "nearest")
+
+  -- Load all sound effects (missing files are skipped gracefully)
+  SFX.load()
 
   -- Boot into the main menu
   StateManager.push(MainMenu)
 end
 
 function love.update(dt)
+  MusicManager.update(dt)  -- advance music tween timers
   StateManager.update(dt)  -- reads Input.wasPressed first
   Input.update()           -- then clear pressed_this_frame for next frame
 end

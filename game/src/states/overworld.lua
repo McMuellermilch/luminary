@@ -19,6 +19,8 @@ local Inventory      = require("src.creatures.inventory")
 local CaptureSystem  = require("src.systems.capturesystem")
 local TrustMeter     = require("src.ui.trustmeter")
 local RegionState    = require("src.world.regionstate")
+local MusicManager   = require("src.audio.musicmanager")
+local SFX            = require("src.audio.sfx")
 
 local Overworld = {}
 Overworld.__index = Overworld
@@ -82,6 +84,13 @@ function Overworld:_loadMap(map_path, spawn_id)
 
   -- Notify RegionState so shader params snap to correct values
   RegionState.onMapLoad(MapManager.region)
+
+  -- Play region music based on lit state
+  local region = MapManager.region
+  if region then
+    local set_name = RegionState.isLit(region) and (region .. "_lit") or (region .. "_dark")
+    MusicManager.play(set_name)
+  end
 
   -- Spawn NPCs
   for _, data in ipairs(MapManager.npcs) do
@@ -149,6 +158,11 @@ function Overworld:enter(params)
   self._dark_shader = nil
 
   WarpSystem.reset()
+
+  -- Audio: warp SFX on zone trigger
+  Events.on("warp_completed", function()
+    SFX.play("warp")
+  end)
 end
 
 -- Called by WarpSystem at fade midpoint to swap map without leaving the state.
@@ -218,12 +232,22 @@ function Overworld:_resolveHitboxes()
               enemy:getComponent("physics"):move(hb.kbx, hb.kby,
                 function(_, other) return other.type=="wall" and "slide" or "cross" end)
             end
+            SFX.play("attack_hit", { pitch = 0.9 + math.random() * 0.2 })
+            MusicManager.setContext("combat")
             if eh:isDead() then
               Events.emit("enemy_defeated", {
                 exp_yield   = enemy.exp_yield   or 0,
                 loot_lumens = enemy.loot_lumens or 5,
               })
               enemy:destroy()
+              -- Return to overworld mix if no live enemies remain
+              local any_alive = false
+              for _, e in ipairs(self._enemies) do
+                if e.active and not e:getComponent("health"):isDead() then
+                  any_alive = true; break
+                end
+              end
+              if not any_alive then MusicManager.setContext("overworld") end
             end
             hit = true; break
           end
@@ -405,12 +429,15 @@ function Overworld:_resolveCapture()
   if not cap.enemy then return end   -- was a reject-message capture, nothing to resolve
 
   if cap.meter.success then
+    SFX.play("capture_win")
     -- Remove from enemy tracking list before destroy
     for i, e in ipairs(self._enemies) do
       if e == cap.enemy then table.remove(self._enemies, i); break end
     end
     CaptureSystem.finalize(cap.enemy)
     cap.enemy:destroy()
+  else
+    SFX.play("capture_fail")
   end
   -- On failure: enemy remains, already de-paused by clearing _capture
 end
