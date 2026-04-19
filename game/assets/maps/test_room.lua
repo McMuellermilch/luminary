@@ -88,6 +88,7 @@ return {
           shape = "rectangle",
           x = 288, y = 208,
           width = 32, height = 32,
+          rotation = 0,
           visible = true,
           properties = {
             id = "default"
