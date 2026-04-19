@@ -2,15 +2,17 @@
 -- Loads a Tiled map, runs player movement + camera, draws the world.
 -- Handles warp zone detection, NPC spawning, enemy spawning and combat.
 
-local Input         = require("src.core.input")
-local MapManager    = require("src.world.mapmanager")
-local Camera        = require("src.world.camera")
-local Player        = require("src.entities.player")
-local NPC           = require("src.entities.npc")
-local Enemy         = require("src.entities.enemy")
-local EnemyAI       = require("src.combat.enemyai")
-local WarpSystem    = require("src.world.warpsystem")
-local EntityManager = require("src.entities.entitymanager")
+local Input          = require("src.core.input")
+local MapManager     = require("src.world.mapmanager")
+local Camera         = require("src.world.camera")
+local Player         = require("src.entities.player")
+local NPC            = require("src.entities.npc")
+local Enemy          = require("src.entities.enemy")
+local EnemyAI        = require("src.combat.enemyai")
+local WarpSystem     = require("src.world.warpsystem")
+local EntityManager  = require("src.entities.entitymanager")
+local PartyManager   = require("src.creatures.partymanager")
+local Events         = require("src.core.events")
 
 local Overworld = {}
 Overworld.__index = Overworld
@@ -18,9 +20,9 @@ Overworld.__index = Overworld
 local DEFAULT_MAP   = "assets/maps/willowfen_town.lua"
 local DEFAULT_SPAWN = "default"
 
--- Hitbox dimensions per charge level
-local CHARGE_DMG = { quick = 3, medium = 5, heavy = 9 }
-local CHARGE_HB  = {
+-- Charge multipliers — applied to attacker atk stat
+local CHARGE_MULT = { quick = 1.0, medium = 1.5, heavy = 2.5 }
+local CHARGE_HB   = {
   quick  = { w = 28, h = 28, kb = 0  },
   medium = { w = 38, h = 38, kb = 30 },
   heavy  = { w = 52, h = 52, kb = 70 },
@@ -60,7 +62,7 @@ local function make_player_hitbox(player, dir, w, h, damage, kb)
   elseif dir == "left"  then hx = px - player.w/2 - w; kbx = -kb
   elseif dir == "right" then hx = px + player.w/2;     kbx =  kb
   end
-  return { x=hx, y=hy, w=w, h=h, damage=damage, kbx=kbx, kby=kby, lifetime=3 }
+  return { x=hx, y=hy, w=w, h=h, raw_atk=damage, kbx=kbx, kby=kby, lifetime=3 }
 end
 
 -- -------------------------------------------------------------------------
@@ -96,11 +98,15 @@ function Overworld:enter(params)
   local map_path = params.map   or DEFAULT_MAP
   local spawn_id = params.spawn or DEFAULT_SPAWN
 
+  -- Ensure starting party exists
+  PartyManager.initIfEmpty()
+
   local spawn = self:_loadMap(map_path, spawn_id)
 
+  local active = PartyManager.getActive()
   local px = spawn.x + (32 - 20) / 2
   local py = spawn.y + (32 - 26) / 2
-  self.player = Player.new(px, py)
+  self.player = Player.new(px, py, active and active.max_hp or 10)
   EntityManager.add(self.player)
 
   self.camera = Camera.new()
@@ -122,9 +128,10 @@ end
 function Overworld:_reload(map_path, spawn_id)
   local spawn = self:_loadMap(map_path, spawn_id)
 
+  local active = PartyManager.getActive()
   local px = spawn.x + (32 - 20) / 2
   local py = spawn.y + (32 - 26) / 2
-  self.player = Player.new(px, py)
+  self.player = Player.new(px, py, active and active.max_hp or 10)
   EntityManager.add(self.player)
 
   self.camera:setBounds(0, 0, MapManager.pixelWidth(), MapManager.pixelHeight())
@@ -147,10 +154,12 @@ function Overworld:exit() end
 -- Resolve a player attack hitbox against all enemies.
 -- -------------------------------------------------------------------------
 function Overworld:_resolvePlayerAttack(attack)
-  local level = charge_level(attack.charge)
-  local def   = CHARGE_HB[level]
-  local hb    = make_player_hitbox(self.player, attack.dir,
-                  def.w, def.h, CHARGE_DMG[level], def.kb)
+  local level  = charge_level(attack.charge)
+  local hb_def = CHARGE_HB[level]
+  local active = PartyManager.getActive()
+  local raw_atk = (active and active.atk or 10) * CHARGE_MULT[level]
+  local hb = make_player_hitbox(self.player, attack.dir,
+               hb_def.w, hb_def.h, raw_atk, hb_def.kb)
   self._player_hitboxes[#self._player_hitboxes + 1] = hb
 end
 
@@ -169,19 +178,20 @@ function Overworld:_resolveHitboxes()
           local eh = enemy:getComponent("health")
           if not eh:isDead()
           and overlaps(hb.x,hb.y,hb.w,hb.h, enemy.x,enemy.y,enemy.w,enemy.h) then
-            eh:damage(hb.damage)
+            -- Stat-based damage: max(1, atk - def * 0.5)
+            local damage = math.max(1, math.floor(hb.raw_atk - (enemy.base_def or 5) * 0.5))
+            eh:damage(damage)
             enemy:onHit()
             self:_addFlash(enemy.x + enemy.w/2, enemy.y + enemy.h/2)
             self._hit_pause = HIT_PAUSE_FRAMES
-            -- Knockback enemy
             if hb.kbx ~= 0 or hb.kby ~= 0 then
-              local ep = enemy:getComponent("physics")
-              ep:move(hb.kbx, hb.kby, function(_, other)
-                return other.type == "wall" and "slide" or "cross"
-              end)
+              enemy:getComponent("physics"):move(hb.kbx, hb.kby,
+                function(_, other) return other.type=="wall" and "slide" or "cross" end)
             end
-            -- Remove dead enemies
-            if eh:isDead() then enemy:destroy() end
+            if eh:isDead() then
+              Events.emit("enemy_defeated", { exp_yield = enemy.exp_yield or 0 })
+              enemy:destroy()
+            end
             hit = true; break
           end
         end
@@ -192,6 +202,8 @@ function Overworld:_resolveHitboxes()
   self._player_hitboxes = keep_p
 
   -- Enemy hitboxes vs player
+  local active = PartyManager.getActive()
+  local player_def = active and active.def or 5
   local keep_e = {}
   for _, hb in ipairs(self._enemy_hitboxes) do
     hb.lifetime = hb.lifetime - 1
@@ -200,11 +212,12 @@ function Overworld:_resolveHitboxes()
       if not ph:isDead()
       and overlaps(hb.x,hb.y,hb.w,hb.h,
                    self.player.x,self.player.y,self.player.w,self.player.h) then
-        ph:damage(hb.damage)
+        local damage = math.max(1, math.floor((hb.raw_atk or hb.damage or 2) - player_def * 0.5))
+        ph:damage(damage)
+        if active then active.hp = math.max(0, active.hp - damage) end
         self:_addFlash(self.player.x + self.player.w/2,
                        self.player.y + self.player.h/2)
         self._hit_pause = HIT_PAUSE_FRAMES
-        -- (Defeat handling can be added in Phase 6)
       else
         keep_e[#keep_e+1] = hb
       end
@@ -290,13 +303,20 @@ function Overworld:draw()
   self.camera:draw()
 
   -- Debug HUD
+  local active = PartyManager.getActive()
+  local lumin_str = active
+    and string.format("  |  %s Lv%d  HP:%d/%d  EXP:%d/%d",
+      active.data.name, active.level,
+      active.hp, active.max_hp,
+      active.exp, active.exp_to_next)
+    or ""
   love.graphics.setColor(0, 0, 0, 0.5)
-  love.graphics.rectangle("fill", 0, 0, 300, 36)
+  love.graphics.rectangle("fill", 0, 0, 540, 36)
   love.graphics.setColor(1, 1, 1, 0.9)
   love.graphics.setFont(get_debug_font())
   love.graphics.print(
-    string.format("x:%.0f y:%.0f  facing:%s  [Esc=menu]",
-      self.player.x, self.player.y, self.player:getFacing()),
+    string.format("x:%.0f y:%.0f  facing:%s  [Esc=menu]%s",
+      self.player.x, self.player.y, self.player:getFacing(), lumin_str),
     6, 10)
   love.graphics.setColor(1, 1, 1, 1)
 end

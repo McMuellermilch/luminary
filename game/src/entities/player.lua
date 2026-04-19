@@ -28,7 +28,7 @@ local function collision_filter(item, other)
   return "cross"
 end
 
-function Player.new(x, y)
+function Player.new(x, y, max_hp)
   local self = Entity.new(x, y)
   setmetatable(self, Player)
 
@@ -51,8 +51,8 @@ function Player.new(x, y)
   local facing = Facing.new("down")
   self:addComponent("facing", facing)
 
-  -- Health
-  self:addComponent("health", Health.new(10))
+  -- Health — initialised from active Lumin's max HP if available
+  self:addComponent("health", Health.new(max_hp or 10))
 
   -- ChargeRing — attack charge visualisation
   self:addComponent("chargering", ChargeRing.new())

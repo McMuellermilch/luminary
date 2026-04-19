@@ -120,11 +120,11 @@ function EnemyAI.update(enemy, player_entity, dt)
       local dir_y = (dist > 0) and (dy / dist) or 0
       local hw, hh = 28, 28
       hitbox = {
-        x        = ecx + dir_x * (ew / 2) - hw / 2,
-        y        = ecy + dir_y * (eh / 2) - hh / 2,
-        w        = hw,
-        h        = hh,
-        damage   = enemy.base_damage or 2,
+        x       = ecx + dir_x * (ew / 2) - hw / 2,
+        y       = ecy + dir_y * (eh / 2) - hh / 2,
+        w       = hw,
+        h       = hh,
+        raw_atk = enemy.base_atk or enemy.base_damage or 10,
         lifetime = 3,
       }
       -- Turn to face player

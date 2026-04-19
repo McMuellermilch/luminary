@@ -33,14 +33,16 @@ function Enemy.new(data)
   self.name = def.name or "Enemy"
 
   -- AI parameters (read by EnemyAI module)
-  self.spawn_x        = x
-  self.spawn_y        = y
-  self.patrol_radius  = data.patrol_radius or 80
-  self.speed          = def.speed           or 55
-  self.aggro_range    = def.aggro_range     or 100
-  self.attack_range   = def.attack_range    or 32
-  self.base_damage    = def.base_damage     or 2
-  self.attack_cooldown = def.attack_cooldown or 1.8
+  self.spawn_x         = x
+  self.spawn_y         = y
+  self.patrol_radius   = data.patrol_radius    or 80
+  self.speed           = def.speed             or 55
+  self.aggro_range     = def.aggro_range       or 100
+  self.attack_range    = def.attack_range      or 32
+  self.base_atk        = def.base_atk          or def.base_damage or 10
+  self.base_def        = def.base_def          or 5
+  self.attack_cooldown = def.attack_cooldown   or 1.8
+  self.exp_yield       = def.exp_yield         or 5
 
   -- Physics
   local phys = Physics.new(MapManager.world, W, H)
@@ -60,7 +62,7 @@ function Enemy.new(data)
   facing:forceDirection("down")
 
   -- Health
-  self:addComponent("health", Health.new(def.max_hp or 8))
+  self:addComponent("health", Health.new(def.base_hp or def.max_hp or 8))
 
   -- Hit flash timer (white overlay on damage)
   self._flash_timer = 0
