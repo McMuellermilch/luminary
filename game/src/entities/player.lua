@@ -25,7 +25,7 @@ local COLORS = {
 --   "slide"  — stop and slide along walls
 --   "cross"  — pass through but register the collision (triggers)
 local function collisionFilter(item, other)
-  if other.type == "wall" then
+  if other.type == "wall" or other.type == "npc" then
     return "slide"
   end
   return "cross"

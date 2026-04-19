@@ -49,10 +49,8 @@ function MapManager.load(map_path, spawn_id)
   local map = STI(map_path)
   MapManager.map = map
 
-  -- Hide collision layer — we handle it via bump, not rendering
-  if map.layers["collision"] then
-    map.layers["collision"].visible = false
-  end
+  -- Collision layer is rendered as visible wall tiles AND handled by bump.
+  -- Keep visible = true (the default) so wall tiles show on screen.
 
   -- Register collision tiles into bump
   MapManager._buildCollision(map)
@@ -149,12 +147,14 @@ function MapManager.drawBelow()
   local map = MapManager.map
   if not map then return end
 
-  local ground_layer  = map.layers["ground"]
-  local deco_layer    = map.layers["decoration"]
+  local ground_layer     = map.layers["ground"]
+  local deco_layer       = map.layers["decoration"]
+  local collision_layer  = map.layers["collision"]
 
   -- STI sets layer.draw as a plain function (not a method), so use dot call
-  if ground_layer  then ground_layer.draw()  end
-  if deco_layer    then deco_layer.draw()    end
+  if ground_layer     then ground_layer.draw()     end
+  if deco_layer       then deco_layer.draw()       end
+  if collision_layer  then collision_layer.draw()  end
 end
 
 function MapManager.drawAbove()
