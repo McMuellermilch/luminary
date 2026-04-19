@@ -10,7 +10,7 @@ local Overworld = {}
 Overworld.__index = Overworld
 
 -- Default map loaded when the state is first entered without params.
-local DEFAULT_MAP  = "assets/maps/test_room.tmx"
+local DEFAULT_MAP  = "assets/maps/test_room.lua"
 local DEFAULT_SPAWN = "default"
 
 function Overworld:enter(params)

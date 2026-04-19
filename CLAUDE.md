@@ -12,7 +12,7 @@ See `/storybook/` for the full game design document.
 ## Tech Stack
 
 - **Engine**: Love2D 11.x (Lua 5.1)
-- **Maps**: Tiled Map Editor → STI (Simple Tiled Implementation)
+- **Maps**: Tiled Map Editor → STI (Simple Tiled Implementation) — export maps as **Lua** format (`.lua`), not `.tmx`. STI only accepts Lua-format map files.
 - **Collision**: bump.lua
 - **Animation**: anim8
 - **Camera**: STALKER-X
