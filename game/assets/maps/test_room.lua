@@ -24,6 +24,7 @@ return {
       imagewidth = 96,
       imageheight = 32,
       tilecount = 3,
+      tileoffset = { x = 0, y = 0 },
       tiles = {}
     }
   },
