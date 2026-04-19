@@ -102,10 +102,13 @@ Run from the repository root. Requires Love2D 11.x installed.
 ## Phase Completion Workflow
 
 When a phase is finished:
-1. Commit all changes with a descriptive commit message referencing the phase
-2. Push to `origin/main`
-3. Close the corresponding GitHub issue: `gh issue close <number>`
-4. **Stop. Do not begin the next phase.** Wait for explicit instruction to continue.
+1. Fetch the GitHub issue and read every item in the **Definition of Done** checklist
+2. Verify each item is actually satisfied — do not assume, check the code
+3. Fix anything that is missing before proceeding
+4. Commit all changes with a descriptive commit message referencing the phase
+5. Push to `origin/main`
+6. Close the corresponding GitHub issue: `gh issue close <number>`
+7. **Stop. Do not begin the next phase.** Wait for explicit instruction to continue.
 
 ## Never Do
 
