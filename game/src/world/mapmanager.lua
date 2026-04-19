@@ -115,6 +115,7 @@ function MapManager._parseObjects(map)
         id       = props.id,
         sprite   = props.sprite,
         dialogue = props.dialogue,
+        shop     = props.shop,
         facing   = props.facing or "down",
       }
 

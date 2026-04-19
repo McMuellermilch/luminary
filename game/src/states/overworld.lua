@@ -14,6 +14,7 @@ local EntityManager  = require("src.entities.entitymanager")
 local PartyManager   = require("src.creatures.partymanager")
 local Events         = require("src.core.events")
 local Items          = require("src.data.items")
+local Inventory      = require("src.creatures.inventory")
 local CaptureSystem  = require("src.systems.capturesystem")
 local TrustMeter     = require("src.ui.trustmeter")
 
@@ -198,7 +199,10 @@ function Overworld:_resolveHitboxes()
                 function(_, other) return other.type=="wall" and "slide" or "cross" end)
             end
             if eh:isDead() then
-              Events.emit("enemy_defeated", { exp_yield = enemy.exp_yield or 0 })
+              Events.emit("enemy_defeated", {
+                exp_yield   = enemy.exp_yield   or 0,
+                loot_lumens = enemy.loot_lumens or 5,
+              })
               enemy:destroy()
             end
             hit = true; break
@@ -271,15 +275,15 @@ end
 -- Returns item_id string, or nil if none available.
 local function pick_lantern(enemy)
   if enemy.creature_type == "void" then
-    if PartyManager.itemCount("duskglass_lantern") > 0 then
+    if Inventory.count("duskglass_lantern") > 0 then
       return "duskglass_lantern"
     end
     return nil
   end
-  if PartyManager.itemCount("warmglass_lantern") > 0 then
+  if Inventory.count("warmglass_lantern") > 0 then
     return "warmglass_lantern"
   end
-  if PartyManager.itemCount("lightglass_lantern") > 0 then
+  if Inventory.count("lightglass_lantern") > 0 then
     return "lightglass_lantern"
   end
   return nil
@@ -305,7 +309,7 @@ function Overworld:_throwLantern()
   end
 
   -- Consume the lantern regardless of outcome
-  PartyManager.consumeItem(item_id)
+  Inventory.remove(item_id)
 
   local trust = CaptureSystem.calcTrust(enemy, item)
   self._capture = {
@@ -456,10 +460,11 @@ function Overworld:draw()
       active.hp, active.max_hp,
       active.exp, active.exp_to_next)
     or ""
-  local lantern_count = PartyManager.itemCount("lightglass_lantern")
-    + PartyManager.itemCount("warmglass_lantern")
-    + PartyManager.itemCount("duskglass_lantern")
-  local lantern_str = string.format("  |  Lanterns:%d  [Q=throw]", lantern_count)
+  local lantern_count = Inventory.count("lightglass_lantern")
+    + Inventory.count("warmglass_lantern")
+    + Inventory.count("duskglass_lantern")
+  local lantern_str = string.format("  |  Lanterns:%d  %dL  [Q=throw]",
+    lantern_count, Inventory.lumens)
   love.graphics.setColor(0, 0, 0, 0.5)
   love.graphics.rectangle("fill", 0, 0, 720, 36)
   love.graphics.setColor(1, 1, 1, 0.9)

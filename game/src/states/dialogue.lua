@@ -8,6 +8,7 @@
 
 local Input      = require("src.core.input")
 local Events     = require("src.core.events")
+local Flags      = require("src.core.flags")
 local Dialogues  = require("src.data.dialogues")
 local DialogueUI = require("src.ui.dialogue")
 
@@ -21,6 +22,22 @@ function DialogueState:enter(params)
   local sequence = Dialogues[self.dialogue_id]
   assert(sequence, "DialogueState: unknown dialogue_id '" .. self.dialogue_id .. "'")
 
+  -- Conditional dialogue: if 'requires' flag is not set, use fallback or close.
+  if sequence.requires and not Flags.is(sequence.requires) then
+    local fallback_id = sequence.fallback
+    if fallback_id and Dialogues[fallback_id] then
+      self.dialogue_id = fallback_id
+      sequence = Dialogues[fallback_id]
+    else
+      -- No fallback — close immediately on the first update frame
+      self._skip = true
+      self.sequence = sequence
+      self.index    = 1
+      return
+    end
+  end
+
+  self._skip    = false
   self.sequence = sequence
   self.index    = 1
   self.box      = DialogueUI.new(self.sequence[self.index])
@@ -29,6 +46,13 @@ end
 function DialogueState:exit() end
 
 function DialogueState:update(dt)
+  -- Close immediately if the requires-flag check failed and there's no fallback.
+  if self._skip then
+    local StateManager = require("src.states.statemanager")
+    StateManager.pop()
+    return
+  end
+
   self.box:update(dt)
 
   if Input.wasPressed("confirm") then
@@ -39,7 +63,10 @@ function DialogueState:update(dt)
       -- Advance to next line or close
       self.index = self.index + 1
       if self.index > #self.sequence then
-        -- Dialogue finished
+        -- Dialogue finished — set any declared flag
+        if self.sequence.sets_flag then
+          Flags.set(self.sequence.sets_flag, true)
+        end
         local StateManager = require("src.states.statemanager")
         Events.emit("dialogue_complete", self.dialogue_id)
         StateManager.pop()
@@ -53,7 +80,7 @@ end
 function DialogueState:draw()
   -- The overworld underneath draws itself first (StateManager bottom→top).
   -- We only draw the dialogue box overlay here.
-  self.box:draw()
+  if self.box then self.box:draw() end
 end
 
 function DialogueState:keypressed(key) end

@@ -1,15 +1,16 @@
 -- PartyManager
 -- Manages the player's active party (up to 3 Lumins) and PC storage.
 -- Also handles EXP distribution when enemies are defeated.
+-- Item management is delegated to src/creatures/inventory.lua.
 
-local Events = require("src.core.events")
-local Lumin  = require("src.creatures.lumin")
+local Events    = require("src.core.events")
+local Lumin     = require("src.creatures.lumin")
+local Inventory = require("src.creatures.inventory")
 
 local PartyManager = {}
 
-PartyManager.party     = {}   -- active party, max 3 Lumin instances
-PartyManager.storage   = {}   -- PC storage (unlimited; serialised in Phase 11)
-PartyManager.inventory = {}   -- item counts: { [item_id] = count }
+PartyManager.party   = {}   -- active party, max 3 Lumin instances
+PartyManager.storage = {}   -- PC storage (unlimited; serialised in Phase 11)
 
 -- -------------------------------------------------------------------------
 -- Initialisation — call once at game start if party is empty.
@@ -17,25 +18,10 @@ PartyManager.inventory = {}   -- item counts: { [item_id] = count }
 function PartyManager.initIfEmpty()
   if #PartyManager.party == 0 then
     PartyManager.add(Lumin.new("pip", 1))
-    -- Starting capture items
-    PartyManager.inventory["lightglass_lantern"] = 3
+    -- Starting resources
+    Inventory.add("lightglass_lantern", 3)
+    Inventory.lumens = 200
   end
-end
-
--- -------------------------------------------------------------------------
--- Inventory helpers
--- -------------------------------------------------------------------------
-
-function PartyManager.itemCount(item_id)
-  return PartyManager.inventory[item_id] or 0
-end
-
--- Consume one of the given item. Returns true on success, false if none left.
-function PartyManager.consumeItem(item_id)
-  local count = PartyManager.inventory[item_id] or 0
-  if count <= 0 then return false end
-  PartyManager.inventory[item_id] = count - 1
-  return true
 end
 
 -- -------------------------------------------------------------------------

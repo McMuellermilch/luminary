@@ -45,6 +45,7 @@ function NPC.new(data)
   self.type     = "npc"           -- bump tag used by player interaction + collision
   self.id       = data.id or "npc"
   self.dialogue = data.dialogue or ""
+  self.shop     = data.shop or nil   -- shop_id; if set, opens ShopState on interact
 
   -- Physics — solid hitbox in bump world
   local phys = Physics.new(MapManager.world, W, H)
@@ -81,9 +82,12 @@ function NPC:onInteract(player)
   end
   self:getComponent("facing"):forceDirection(dir)
 
-  -- Push dialogue state
-  if self.dialogue and self.dialogue ~= "" then
-    local StateManager  = require("src.states.statemanager")
+  -- Push shop state if this NPC is a shopkeeper, otherwise push dialogue
+  local StateManager = require("src.states.statemanager")
+  if self.shop then
+    local ShopState = require("src.ui.shop")
+    StateManager.push(ShopState, { shop_id = self.shop })
+  elseif self.dialogue and self.dialogue ~= "" then
     local DialogueState = require("src.states.dialogue")
     StateManager.push(DialogueState, { dialogue_id = self.dialogue })
   end

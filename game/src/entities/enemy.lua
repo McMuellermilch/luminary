@@ -50,6 +50,7 @@ function Enemy.new(data)
   self.base_def        = def.base_def          or 5
   self.attack_cooldown = def.attack_cooldown   or 1.8
   self.exp_yield       = def.exp_yield         or 5
+  self.loot_lumens     = def.loot_lumens       or 5
 
   -- Physics
   local phys = Physics.new(MapManager.world, W, H)
