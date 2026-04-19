@@ -1,77 +1,98 @@
--- Camera wrapper around STALKER-X
+-- Camera — canvas-based 2× pixel-art zoom + STALKER-X follow
+--
+-- Renders the world to a 640×360 logical canvas, then scales it 2× to fill
+-- the 1280×720 window. This gives pixel-perfect output and correct bounds.
+--
 -- Usage:
 --   local Camera = require("src.world.camera")
 --   local cam = Camera.new()
---   cam:setBounds(0, 0, mapW, mapH)
---   cam:setFollowStyle("TOPDOWN")
---   cam:setFollowLerp(0.08)
+--   cam:setBounds(0, 0, mapPixelW, mapPixelH)
 --
---   -- In update:
---   cam:follow(player.x + player.w/2, player.y + player.h/2)
+--   -- update:
+--   cam:follow(px, py)
 --   cam:update(dt)
 --
---   -- In draw:
---   cam:attach()
---     -- draw world
---   cam:detach()
---   cam:draw()  -- flash/fade overlays
+--   -- draw:
+--   cam:attach()          -- redirect draw calls to logical canvas
+--     MapManager.drawBelow()
+--     player:draw()
+--     MapManager.drawAbove()
+--   cam:detach()          -- flush canvas to screen at 2×
+--   cam:draw()            -- STALKER-X flash/fade overlays
 
 local CameraLib = require("lib.stalker-x.camera")
+
+-- Logical resolution (world pixels visible at once).
+-- At SCALE=2 this fills a 1280×720 window exactly.
+local SCALE   = 2
+local LOGI_W  = 640   -- love.graphics.getWidth()  / SCALE
+local LOGI_H  = 360   -- love.graphics.getHeight() / SCALE
 
 local Camera = {}
 Camera.__index = Camera
 
 function Camera.new()
-  local w, h  = love.graphics.getDimensions()
-  local inner = CameraLib(w/2, h/2, w, h)
-  inner:setFollowStyle("TOPDOWN")
-  inner:setFollowLerp(0.08)  -- smooth chase, not instant lock
+  local canvas = love.graphics.newCanvas(LOGI_W, LOGI_H)
+  canvas:setFilter("nearest", "nearest")   -- pixel-perfect upscale
 
-  return setmetatable({ _cam = inner }, Camera)
+  -- STALKER-X camera sized to the logical canvas (no internal scale)
+  local inner = CameraLib(LOGI_W/2, LOGI_H/2, LOGI_W, LOGI_H)
+  inner:setFollowStyle("TOPDOWN")
+  inner:setFollowLerp(0.08)
+
+  return setmetatable({
+    _cam    = inner,
+    _canvas = canvas,
+  }, Camera)
 end
 
--- Set world bounds so the camera never shows outside the map.
--- x, y = top-left of map in world coords (usually 0, 0)
--- w, h = pixel dimensions of the full map
+-- Set world bounds in logical (world) pixels.
 function Camera:setBounds(x, y, w, h)
   self._cam:setBounds(x, y, w, h)
 end
 
--- Tell the camera where to move toward this frame.
 function Camera:follow(x, y)
   self._cam:follow(x, y)
 end
 
--- Must be called every frame after follow().
 function Camera:update(dt)
   self._cam:update(dt)
 end
 
--- Call before drawing world-space content.
+-- Begin rendering to the logical canvas.
 function Camera:attach()
+  love.graphics.setCanvas(self._canvas)
+  love.graphics.clear()
   self._cam:attach()
 end
 
--- Call after drawing world-space content.
+-- Stop rendering to canvas, draw it scaled to the window.
 function Camera:detach()
   self._cam:detach()
+  love.graphics.setCanvas()   -- back to screen
+
+  love.graphics.setColor(1, 1, 1, 1)
+  love.graphics.draw(self._canvas, 0, 0, 0, SCALE, SCALE)
 end
 
--- Draw screen-space overlays (flash, fade effects from STALKER-X).
+-- STALKER-X screen-space overlays (flash, fade). Drawn at full window size.
 function Camera:draw()
   self._cam:draw()
 end
 
--- Trigger a screen shake.
--- intensity: pixel radius of shake (e.g. 4)
--- duration:  seconds (e.g. 0.2)
 function Camera:shake(intensity, duration)
   self._cam:shake(intensity, duration, 60)
 end
 
--- Convert a world-space position to screen-space (useful for UI anchoring).
+-- Convert a world position to screen (window) coordinates.
 function Camera:toScreen(wx, wy)
-  return self._cam:toCameraCoords(wx, wy)
+  local cx, cy = self._cam:toCameraCoords(wx, wy)
+  return cx * SCALE, cy * SCALE
 end
+
+-- Expose logical dimensions for external use (e.g. UI layout).
+Camera.logicalWidth  = LOGI_W
+Camera.logicalHeight = LOGI_H
+Camera.scale         = SCALE
 
 return Camera
