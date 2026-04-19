@@ -22,6 +22,8 @@ local RegionState    = require("src.world.regionstate")
 local MusicManager   = require("src.audio.musicmanager")
 local SFX            = require("src.audio.sfx")
 local SaveManager    = require("src.save.savemanager")
+local CombatHUD      = require("src.ui.combathud")
+local HUD            = require("src.ui.hud")
 
 local Overworld = {}
 Overworld.__index = Overworld
@@ -161,6 +163,9 @@ function Overworld:enter(params)
   -- Lighthouse save prompt (nil when inactive)
   self._lighthouse_prompt = nil  -- {} when asking, { timer, msg } when showing result
 
+  -- Light Meter: 0.0–1.0, fills on hits, drains on damage
+  self._light_meter = 0
+
   -- Darkness shader (lazily loaded)
   self._dark_shader = nil
 
@@ -195,6 +200,10 @@ function Overworld:_reload(map_path, spawn_id)
 
   -- Reset capture state
   self._capture = nil
+
+  -- Reset lighthouse prompt and light meter on map change
+  self._lighthouse_prompt = nil
+  self._light_meter       = self._light_meter or 0  -- preserve meter across warps
 
   WarpSystem.reset()
 end
@@ -241,6 +250,7 @@ function Overworld:_resolveHitboxes()
             end
             SFX.play("attack_hit", { pitch = 0.9 + math.random() * 0.2 })
             MusicManager.setContext("combat")
+            self._light_meter = math.min(1.0, self._light_meter + 0.18)  -- fill on hit
             if eh:isDead() then
               Events.emit("enemy_defeated", {
                 exp_yield   = enemy.exp_yield   or 0,
@@ -279,6 +289,7 @@ function Overworld:_resolveHitboxes()
         local damage = math.max(1, math.floor((hb.raw_atk or hb.damage or 2) - player_def * 0.5))
         ph:damage(damage)
         if active then active.hp = math.max(0, active.hp - damage) end
+        self._light_meter = math.max(0.0, self._light_meter - 0.22)  -- drain on damage
         self:_addFlash(self.player.x + self.player.w/2,
                        self.player.y + self.player.h/2)
         self._hit_pause = HIT_PAUSE_FRAMES
@@ -453,8 +464,8 @@ end
 function Overworld:update(dt)
   if Input.wasPressed("pause") then
     local StateManager = require("src.states.statemanager")
-    local MainMenu     = require("src.states.mainmenu")
-    StateManager.replace(MainMenu)
+    local PauseMenu    = require("src.states.pausemenu")
+    StateManager.push(PauseMenu)
     return
   end
 
@@ -509,6 +520,16 @@ function Overworld:update(dt)
     self.camera:follow(cx, cy)
     self.camera:update(dt)
     return
+  end
+
+  -- Radiance Burst: fires when light meter is full and player presses ability2
+  if self._light_meter >= 1.0 and Input.wasPressed("ability2") then
+    local active    = PartyManager.getActive()
+    local companion = PartyManager.getCompanion()
+    if active    then active.hp    = math.min(active.max_hp,    active.hp    + 20) end
+    if companion then companion.hp = math.min(companion.max_hp, companion.hp + 20) end
+    self._light_meter = 0
+    SFX.play("menu_select")  -- placeholder until radiance_burst SFX exists
   end
 
   -- Beacon tower / lighthouse interactions (only one fires per confirm press)
@@ -637,27 +658,25 @@ function Overworld:draw()
     end
   end
 
-  -- Debug HUD
-  local active = PartyManager.getActive()
-  local lumin_str = active
-    and string.format("  |  %s Lv%d  HP:%d/%d  EXP:%d/%d",
-      active.data.name, active.level,
-      active.hp, active.max_hp,
-      active.exp, active.exp_to_next)
-    or ""
+  -- Overworld HUD: party strip (top-right)
+  HUD.draw()
+
+  -- Combat HUD: Lumin panels, enemy HP, light meter
+  local charge_frac = self.player
+    and self.player:getComponent("chargering").charge or 0
+  CombatHUD.draw(self._enemies, self._light_meter, charge_frac)
+
+  -- Slim debug bar (top-left)
   local lantern_count = Inventory.count("lightglass_lantern")
     + Inventory.count("warmglass_lantern")
     + Inventory.count("duskglass_lantern")
-  local lantern_str = string.format("  |  Lanterns:%d  %dL  [Q=throw]",
-    lantern_count, Inventory.lumens)
-  love.graphics.setColor(0, 0, 0, 0.5)
-  love.graphics.rectangle("fill", 0, 0, 720, 36)
-  love.graphics.setColor(1, 1, 1, 0.9)
+  love.graphics.setColor(0, 0, 0, 0.42)
+  love.graphics.rectangle("fill", 0, 0, 500, 22)
+  love.graphics.setColor(0.72, 0.72, 0.72, 0.78)
   love.graphics.setFont(get_debug_font())
   love.graphics.print(
-    string.format("x:%.0f y:%.0f  facing:%s  [Esc=menu]%s%s",
-      self.player.x, self.player.y, self.player:getFacing(), lumin_str, lantern_str),
-    6, 10)
+    string.format("x:%.0f y:%.0f  [Esc=pause  Q=throw lantern ×%d]",
+      self.player.x, self.player.y, lantern_count), 6, 4)
   love.graphics.setColor(1, 1, 1, 1)
 end
 
