@@ -50,10 +50,10 @@ local function draw_hp_bar(bar_x, bar_y, bar_w, hp, max_hp)
   love.graphics.setColor(0.48, 0.48, 0.48, 0.72)
   love.graphics.setLineWidth(1)
   love.graphics.rectangle("line", bar_x, bar_y, bar_w, BAR_H)
-  -- HP numbers centred on bar
+  -- HP numbers below the bar
   love.graphics.setFont(font_sm)
-  love.graphics.setColor(1, 1, 1, 0.88)
-  love.graphics.printf(hp .. "/" .. max_hp, bar_x, bar_y, bar_w, "center")
+  love.graphics.setColor(0.80, 0.80, 0.80, 0.80)
+  love.graphics.printf(hp .. "/" .. max_hp, bar_x, bar_y + BAR_H + 1, bar_w, "center")
 end
 
 -- Draw a move slot box at (sx, sy). move_id may be nil.
