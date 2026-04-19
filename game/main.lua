@@ -7,6 +7,7 @@ local Events         = require("src.core.events")
 local MainMenu       = require("src.states.mainmenu")
 local MusicManager   = require("src.audio.musicmanager")
 local SFX            = require("src.audio.sfx")
+local SaveManager    = require("src.save.savemanager")
 
 function love.load()
   -- Pixel-art rendering defaults
@@ -20,6 +21,7 @@ function love.load()
 end
 
 function love.update(dt)
+  SaveManager.update(dt)   -- accumulate play time
   MusicManager.update(dt)  -- advance music tween timers
   StateManager.update(dt)  -- reads Input.wasPressed first
   Input.update()           -- then clear pressed_this_frame for next frame

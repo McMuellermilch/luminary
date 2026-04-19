@@ -21,6 +21,7 @@ local TrustMeter     = require("src.ui.trustmeter")
 local RegionState    = require("src.world.regionstate")
 local MusicManager   = require("src.audio.musicmanager")
 local SFX            = require("src.audio.sfx")
+local SaveManager    = require("src.save.savemanager")
 
 local Overworld = {}
 Overworld.__index = Overworld
@@ -84,6 +85,9 @@ function Overworld:_loadMap(map_path, spawn_id)
 
   -- Notify RegionState so shader params snap to correct values
   RegionState.onMapLoad(MapManager.region)
+
+  -- Notify SaveManager so it can track the current map for autosave
+  Events.emit("map_loaded", { map = map_path, spawn = spawn_id })
 
   -- Play region music based on lit state
   local region = MapManager.region
@@ -153,6 +157,9 @@ function Overworld:enter(params)
 
   -- Capture state (nil when inactive)
   self._capture = nil          -- { enemy, meter, reject_msg, reject_timer }
+
+  -- Lighthouse save prompt (nil when inactive)
+  self._lighthouse_prompt = nil  -- {} when asking, { timer, msg } when showing result
 
   -- Darkness shader (lazily loaded)
   self._dark_shader = nil
@@ -340,8 +347,8 @@ function Overworld:_tryLighthouseInteract()
     local dx = math.abs((lh.x + 16) - pcx)
     local dy = math.abs((lh.y + 16) - pcy)
     if dx < 48 and dy < 48 then
-      PartyManager.healAll()
-      self._capture = { reject_msg = "The Lighthouse warmth heals your party!", reject_timer = 2.0 }
+      -- Open save-confirmation prompt (world freezes while it's shown)
+      self._lighthouse_prompt = {}
       return true
     end
   end
@@ -480,6 +487,29 @@ function Overworld:update(dt)
     return
   end
 
+  -- Lighthouse save prompt (freezes world while asking Y/N)
+  if self._lighthouse_prompt then
+    if self._lighthouse_prompt.timer then
+      -- Showing result message — count down and dismiss
+      self._lighthouse_prompt.timer = self._lighthouse_prompt.timer - dt
+      if self._lighthouse_prompt.timer <= 0 then self._lighthouse_prompt = nil end
+    else
+      -- Waiting for player input
+      if Input.wasPressed("confirm") then
+        PartyManager.healAll()
+        SaveManager.save(SaveManager.current_slot)
+        SFX.play("menu_select")
+        self._lighthouse_prompt = { timer = 1.5, msg = "Game Saved.  Party healed!" }
+      elseif Input.wasPressed("cancel") then
+        self._lighthouse_prompt = nil
+      end
+    end
+    local cx, cy = self.player:center()
+    self.camera:follow(cx, cy)
+    self.camera:update(dt)
+    return
+  end
+
   -- Beacon tower / lighthouse interactions (only one fires per confirm press)
   if Input.wasPressed("confirm") then
     if not self:_tryBeaconInteract() then
@@ -581,6 +611,28 @@ function Overworld:draw()
       love.graphics.setColor(1, 1, 1, 1)
       love.graphics.setFont(get_debug_font())
       love.graphics.printf(self._capture.reject_msg, 440, 168, 400, "center")
+    end
+  end
+
+  -- Lighthouse save prompt UI
+  if self._lighthouse_prompt then
+    local sw, sh = love.graphics.getDimensions()
+    local box_w, box_h = 400, 52
+    local bx = math.floor((sw - box_w) / 2)
+    local by = math.floor(sh * 0.38)
+    love.graphics.setColor(0.08, 0.06, 0.12, 0.93)
+    love.graphics.rectangle("fill", bx, by, box_w, box_h, 6, 6)
+    love.graphics.setColor(0.85, 0.75, 0.40, 0.9)
+    love.graphics.setLineWidth(2)
+    love.graphics.rectangle("line", bx, by, box_w, box_h, 6, 6)
+    love.graphics.setLineWidth(1)
+    love.graphics.setFont(get_debug_font())
+    if self._lighthouse_prompt.timer then
+      love.graphics.setColor(0.55, 0.95, 0.55, 1)
+      love.graphics.printf(self._lighthouse_prompt.msg or "Game Saved.", bx, by + 19, box_w, "center")
+    else
+      love.graphics.setColor(0.95, 0.92, 0.88, 1)
+      love.graphics.printf("Save your journey here?  [Z = Yes   X = No]", bx, by + 19, box_w, "center")
     end
   end
 
