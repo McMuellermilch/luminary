@@ -222,6 +222,7 @@ return {
             id       = "bram",
             sprite   = "bram",
             dialogue = "bram_merchant",
+            shop     = "willowfen_shop",
             facing   = "down",
           }
         },
