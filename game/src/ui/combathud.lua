@@ -18,18 +18,18 @@ local font_sm = nil
 local font_md = nil
 local function ensure_fonts()
   if not font_sm then
-    font_sm = love.graphics.newFont(11)
-    font_md = love.graphics.newFont(13)
+    font_sm = love.graphics.newFont(10)
+    font_md = love.graphics.newFont(11)
   end
 end
 
 local PANEL_W  = 180   -- active Lumin panel width
-local PANEL_H  = 90    -- active Lumin panel height
+local PANEL_H  = 82    -- active Lumin panel height
 local COMP_W   = 150   -- companion panel width
-local COMP_H   = 54    -- companion panel height
-local BAR_H    = 10
-local MOVE_W   = 56    -- width of each move slot
-local MOVE_H   = 26    -- height of each move slot
+local COMP_H   = 48    -- companion panel height
+local BAR_H    = 8
+local MOVE_W   = 54    -- width of each move slot
+local MOVE_H   = 20    -- height of each move slot
 local PAD      = 10
 
 local function hp_color(frac)
@@ -106,18 +106,18 @@ function CombatHUD.draw(enemies, light_meter, charge_frac)
     -- Name + level row
     love.graphics.setFont(font_md)
     love.graphics.setColor(1, 1, 1, 0.94)
-    love.graphics.print(active.data and active.data.name or "???", px + 8, py + 7)
+    love.graphics.printf(active.data and active.data.name or "???", px + 8, py + 6, PANEL_W - 50, "left")
     love.graphics.setFont(font_sm)
     love.graphics.setColor(0.78, 0.78, 0.78, 0.82)
-    love.graphics.printf("Lv" .. active.level, px, py + 9, PANEL_W - 8, "right")
+    love.graphics.printf("Lv" .. active.level, px, py + 7, PANEL_W - 8, "right")
 
     -- HP bar
-    draw_hp_bar(px + 8, py + 26, PANEL_W - 16, active.hp, active.max_hp)
+    draw_hp_bar(px + 8, py + 22, PANEL_W - 16, active.hp, active.max_hp)
 
     -- Charge arc indicator (mirrors the world-space ring, for player convenience)
     if charge_frac > 0 then
-      local arc_x   = px + PANEL_W - 22
-      local arc_y   = py + 6
+      local arc_x   = px + PANEL_W - 14
+      local arc_y   = py + 14
       local arc_r   = 10
       local steps   = math.max(3, math.floor(charge_frac * 24))
       local start_a = -math.pi / 2
@@ -160,12 +160,12 @@ function CombatHUD.draw(enemies, light_meter, charge_frac)
 
     love.graphics.setFont(font_md)
     love.graphics.setColor(1, 1, 1, 0.90)
-    love.graphics.print(companion.data and companion.data.name or "???", cx + 8, cy + 7)
+    love.graphics.printf(companion.data and companion.data.name or "???", cx + 8, cy + 6, COMP_W - 44, "left")
     love.graphics.setFont(font_sm)
     love.graphics.setColor(0.78, 0.78, 0.78, 0.78)
-    love.graphics.printf("Lv" .. companion.level, cx, cy + 9, COMP_W - 8, "right")
+    love.graphics.printf("Lv" .. companion.level, cx, cy + 7, COMP_W - 8, "right")
 
-    draw_hp_bar(cx + 8, cy + 30, COMP_W - 16, companion.hp, companion.max_hp)
+    draw_hp_bar(cx + 8, cy + 24, COMP_W - 16, companion.hp, companion.max_hp)
   end
 
   -- -----------------------------------------------------------------------
