@@ -28,7 +28,7 @@ local PANEL_H  = 82    -- active Lumin panel height
 local COMP_W   = 150   -- companion panel width
 local COMP_H   = 48    -- companion panel height
 local BAR_H    = 8
-local MOVE_W   = 54    -- width of each move slot
+local MOVE_W   = 72    -- width of each move slot
 local MOVE_H   = 20    -- height of each move slot
 local PAD      = 10
 
