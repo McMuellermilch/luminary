@@ -21,11 +21,15 @@ MapManager.world = nil
 -- The currently loaded STI map.
 MapManager.map   = nil
 -- Parsed objects from the objects layer, keyed by type.
-MapManager.spawns    = {}
-MapManager.warps     = {}
-MapManager.npcs      = {}
-MapManager.encounters = {}
-MapManager.enemies   = {}
+MapManager.spawns        = {}
+MapManager.warps         = {}
+MapManager.npcs          = {}
+MapManager.encounters    = {}
+MapManager.enemies       = {}
+MapManager.beacon_towers = {}   -- { x, y } world positions
+MapManager.lighthouses   = {}   -- { x, y } world positions
+MapManager.wild_lumins   = {}   -- { x, y, creature_id }
+MapManager.region        = nil  -- region id from map-level properties
 
 -- Internal list of bump items representing wall tiles (for cleanup on unload).
 local wall_items = {}
@@ -36,12 +40,16 @@ local wall_items = {}
 -- -------------------------------------------------------------------------
 function MapManager.load(map_path, spawn_id)
   -- Clear previous map state
-  MapManager.map       = nil
-  MapManager.spawns    = {}
-  MapManager.warps     = {}
-  MapManager.npcs      = {}
-  MapManager.encounters = {}
-  MapManager.enemies   = {}
+  MapManager.map           = nil
+  MapManager.spawns        = {}
+  MapManager.warps         = {}
+  MapManager.npcs          = {}
+  MapManager.encounters    = {}
+  MapManager.enemies       = {}
+  MapManager.beacon_towers = {}
+  MapManager.lighthouses   = {}
+  MapManager.wild_lumins   = {}
+  MapManager.region        = nil
 
   -- Reset bump world
   MapManager.world = bump.newWorld(32)
@@ -50,6 +58,9 @@ function MapManager.load(map_path, spawn_id)
   -- Load map
   local map = STI(map_path)
   MapManager.map = map
+
+  -- Read map-level region property
+  MapManager.region = (map.properties and map.properties.region) or nil
 
   -- Collision layer is rendered as visible wall tiles AND handled by bump.
   -- Keep visible = true (the default) so wall tiles show on screen.
@@ -131,6 +142,23 @@ function MapManager._parseObjects(map)
         y             = obj.y,
         creature_id   = props.creature_id or "gleamfin",
         patrol_radius = props.patrol_radius or 80,
+      }
+
+    elseif obj.type == "beacon_tower" then
+      MapManager.beacon_towers[#MapManager.beacon_towers + 1] = {
+        x = obj.x, y = obj.y,
+      }
+
+    elseif obj.type == "lighthouse" then
+      MapManager.lighthouses[#MapManager.lighthouses + 1] = {
+        x = obj.x, y = obj.y,
+      }
+
+    elseif obj.type == "wild_lumin" then
+      MapManager.wild_lumins[#MapManager.wild_lumins + 1] = {
+        x           = obj.x,
+        y           = obj.y,
+        creature_id = props.creature_id or "gleamfin",
       }
     end
   end

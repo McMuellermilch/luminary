@@ -67,12 +67,16 @@ function Camera:attach()
 end
 
 -- Stop rendering to canvas, draw it scaled to the window.
-function Camera:detach()
+-- post_shader (optional): a love.graphics.Shader applied while drawing
+-- the canvas to screen (used for darkness / post-processing effects).
+function Camera:detach(post_shader)
   self._cam:detach()
   love.graphics.setCanvas()   -- back to screen
 
   love.graphics.setColor(1, 1, 1, 1)
+  if post_shader then love.graphics.setShader(post_shader) end
   love.graphics.draw(self._canvas, 0, 0, 0, SCALE, SCALE)
+  if post_shader then love.graphics.setShader() end
 end
 
 -- STALKER-X screen-space overlays (flash, fade). Drawn at full window size.

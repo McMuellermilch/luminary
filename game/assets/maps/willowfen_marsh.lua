@@ -13,7 +13,7 @@ return {
   tileheight   = 32,
   nextlayerid  = 6,
   nextobjectid = 20,
-  properties   = {},
+  properties   = { region = "willowfen" },
   tilesets = {
     {
       name       = "tileset_test",
@@ -235,6 +235,21 @@ return {
           x = 544, y = 160, width = 32, height = 32,
           rotation = 0, visible = true,
           properties = { creature_id = "gleamfin", patrol_radius = 80 }
+        },
+        -- Wild lumins (ambient, non-hostile)
+        {
+          id = 10, name = "wild_gleamfin_1", type = "wild_lumin",
+          shape = "rectangle",
+          x = 320, y = 96, width = 32, height = 32,
+          rotation = 0, visible = true,
+          properties = { creature_id = "gleamfin" }
+        },
+        {
+          id = 11, name = "wild_mossling_1", type = "wild_lumin",
+          shape = "rectangle",
+          x = 160, y = 320, width = 32, height = 32,
+          rotation = 0, visible = true,
+          properties = { creature_id = "mossling" }
         },
       }
     }

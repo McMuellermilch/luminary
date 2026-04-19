@@ -8,6 +8,7 @@ local Camera         = require("src.world.camera")
 local Player         = require("src.entities.player")
 local NPC            = require("src.entities.npc")
 local Enemy          = require("src.entities.enemy")
+local WildLumin      = require("src.entities.wildlumin")
 local EnemyAI        = require("src.combat.enemyai")
 local WarpSystem     = require("src.world.warpsystem")
 local EntityManager  = require("src.entities.entitymanager")
@@ -17,6 +18,7 @@ local Items          = require("src.data.items")
 local Inventory      = require("src.creatures.inventory")
 local CaptureSystem  = require("src.systems.capturesystem")
 local TrustMeter     = require("src.ui.trustmeter")
+local RegionState    = require("src.world.regionstate")
 
 local Overworld = {}
 Overworld.__index = Overworld
@@ -78,6 +80,9 @@ function Overworld:_loadMap(map_path, spawn_id)
 
   local spawn = MapManager.load(map_path, spawn_id)
 
+  -- Notify RegionState so shader params snap to correct values
+  RegionState.onMapLoad(MapManager.region)
+
   -- Spawn NPCs
   for _, data in ipairs(MapManager.npcs) do
     local npc = NPC.new(data)
@@ -92,6 +97,18 @@ function Overworld:_loadMap(map_path, spawn_id)
     EntityManager.add(enemy)
     self._enemies[#self._enemies + 1] = enemy
   end
+
+  -- Spawn wild lumins
+  self._wild_lumins = {}
+  for _, data in ipairs(MapManager.wild_lumins) do
+    local wl = WildLumin.new(data)
+    EntityManager.add(wl)
+    self._wild_lumins[#self._wild_lumins + 1] = wl
+  end
+
+  -- Store beacon tower and lighthouse positions (world-space)
+  self._beacon_towers = MapManager.beacon_towers
+  self._lighthouses   = MapManager.lighthouses
 
   return spawn
 end
@@ -127,6 +144,9 @@ function Overworld:enter(params)
 
   -- Capture state (nil when inactive)
   self._capture = nil          -- { enemy, meter, reject_msg, reject_timer }
+
+  -- Darkness shader (lazily loaded)
+  self._dark_shader = nil
 
   WarpSystem.reset()
 end
@@ -243,6 +263,65 @@ function Overworld:_addFlash(cx, cy)
   self._hit_flashes[#self._hit_flashes+1] = {
     x=cx-8, y=cy-8, w=16, h=16, timer=0.10
   }
+end
+
+-- -------------------------------------------------------------------------
+-- Darkness shader — lazily loaded once and reused.
+-- -------------------------------------------------------------------------
+function Overworld:_getDarkShader()
+  if not self._dark_shader then
+    self._dark_shader = love.graphics.newShader("assets/shaders/darkness.glsl")
+  end
+  return self._dark_shader
+end
+
+-- -------------------------------------------------------------------------
+-- Try to interact with a nearby beacon tower. Returns true if handled.
+-- -------------------------------------------------------------------------
+function Overworld:_tryBeaconInteract()
+  local pcx, pcy = self.player:center()
+  for _, tower in ipairs(self._beacon_towers or {}) do
+    local dx = math.abs((tower.x + 16) - pcx)
+    local dy = math.abs((tower.y + 16) - pcy)
+    if dx < 48 and dy < 48 then
+      local region = RegionState.getActiveRegion() or "willowfen"
+      if RegionState.isLit(region) then return true end  -- already lit, consume event
+      if not Inventory.has("beacon_shard_willowfen") then
+        -- Show flavour dialogue when player lacks the shard
+        local SM  = require("src.states.statemanager")
+        local Dlg = require("src.states.dialogue")
+        SM.push(Dlg, { dialogue_id = "beacon_tower_no_shard" })
+        return true
+      end
+      local BeaconRekindleState = require("src.states.beaconrekindle")
+      local SM = require("src.states.statemanager")
+      SM.push(BeaconRekindleState, {
+        overworld = self,
+        region_id = region,
+        tower_x   = tower.x,
+        tower_y   = tower.y,
+      })
+      return true
+    end
+  end
+  return false
+end
+
+-- -------------------------------------------------------------------------
+-- Try to interact with a nearby lighthouse. Returns true if handled.
+-- -------------------------------------------------------------------------
+function Overworld:_tryLighthouseInteract()
+  local pcx, pcy = self.player:center()
+  for _, lh in ipairs(self._lighthouses or {}) do
+    local dx = math.abs((lh.x + 16) - pcx)
+    local dy = math.abs((lh.y + 16) - pcy)
+    if dx < 48 and dy < 48 then
+      PartyManager.healAll()
+      self._capture = { reject_msg = "The Lighthouse warmth heals your party!", reject_timer = 2.0 }
+      return true
+    end
+  end
+  return false
 end
 
 -- -------------------------------------------------------------------------
@@ -374,6 +453,13 @@ function Overworld:update(dt)
     return
   end
 
+  -- Beacon tower / lighthouse interactions (only one fires per confirm press)
+  if Input.wasPressed("confirm") then
+    if not self:_tryBeaconInteract() then
+      self:_tryLighthouseInteract()
+    end
+  end
+
   -- Throw lantern (capture attempt)
   if Input.wasPressed("throw_lantern") then
     self:_throwLantern()
@@ -398,6 +484,11 @@ function Overworld:update(dt)
         if hb then self._enemy_hitboxes[#self._enemy_hitboxes+1] = hb end
       end
     end
+  end
+
+  -- Wild lumin AI (with player reference, like enemy AI)
+  for _, wl in ipairs(self._wild_lumins or {}) do
+    if wl.active then wl:updateAI(dt, self.player) end
   end
 
   -- Consume player pending attack
@@ -435,7 +526,21 @@ function Overworld:draw()
     end
     love.graphics.setColor(1, 1, 1, 1)
     MapManager.drawAbove()
-  self.camera:detach()
+  -- Apply darkness shader when region is unlit
+  local post_shader = nil
+  local region = RegionState.getActiveRegion()
+  if not RegionState.isLit(region) then
+    local shader = self:_getDarkShader()
+    local params = RegionState.shader_params
+    local pcx, pcy = self.player:center()
+    local sx, sy   = self.camera:toScreen(pcx, pcy)
+    shader:send("desaturate_amount", params.desaturate)
+    shader:send("brightness",        params.brightness)
+    shader:send("player_screen_pos", {sx, sy})
+    shader:send("vignette_radius",   200.0)
+    post_shader = shader
+  end
+  self.camera:detach(post_shader)
   self.camera:draw()
 
   -- Capture UI (screen space, after camera detach)

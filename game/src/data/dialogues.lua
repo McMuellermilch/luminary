@@ -39,6 +39,19 @@ local dialogues = {
     { speaker = "Guard", portrait = "guard", text = "The Willowroot Dungeon lies ahead." },
     { speaker = "Guard", portrait = "guard", text = "Don't go in unless you're ready. The shadows have been strange lately." },
   },
+
+  -- Wild Lumin flavour
+  wild_lumin_anxious = {
+    { speaker = "...", portrait = "", text = "The Lumin shivers and skitters away from you. The darkness has made it wary." },
+  },
+  wild_lumin_calm = {
+    { speaker = "...", portrait = "", text = "The Lumin seems calmer now. It blinks at you with soft, curious eyes." },
+  },
+
+  -- Beacon Tower (no shard) — placeholder if approached without the item
+  beacon_tower_no_shard = {
+    { speaker = "Beacon Tower", portrait = "", text = "The Tower stands cold and dark. Something is missing from its cradle." },
+  },
 }
 
 return dialogues

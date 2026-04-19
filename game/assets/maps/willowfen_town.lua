@@ -13,7 +13,7 @@ return {
   tileheight   = 32,
   nextlayerid  = 6,
   nextobjectid = 20,
-  properties   = {},
+  properties   = { region = "willowfen" },
   tilesets = {
     {
       name       = "tileset_test",
@@ -238,6 +238,22 @@ return {
             dialogue = "child_npc",
             facing   = "right",
           }
+        },
+        -- Beacon Tower (top-centre of town)
+        {
+          id = 9, name = "Beacon Tower", type = "beacon_tower",
+          shape = "rectangle",
+          x = 288, y = 96, width = 32, height = 32,
+          rotation = 0, visible = true,
+          properties = {}
+        },
+        -- Lighthouse (bottom-left safe zone)
+        {
+          id = 10, name = "Lighthouse", type = "lighthouse",
+          shape = "rectangle",
+          x = 96, y = 352, width = 32, height = 32,
+          rotation = 0, visible = true,
+          properties = {}
         },
       }
     }
