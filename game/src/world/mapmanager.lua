@@ -25,6 +25,7 @@ MapManager.spawns    = {}
 MapManager.warps     = {}
 MapManager.npcs      = {}
 MapManager.encounters = {}
+MapManager.enemies   = {}
 
 -- Internal list of bump items representing wall tiles (for cleanup on unload).
 local wall_items = {}
@@ -40,6 +41,7 @@ function MapManager.load(map_path, spawn_id)
   MapManager.warps     = {}
   MapManager.npcs      = {}
   MapManager.encounters = {}
+  MapManager.enemies   = {}
 
   -- Reset bump world
   MapManager.world = bump.newWorld(32)
@@ -120,6 +122,14 @@ function MapManager._parseObjects(map)
       MapManager.encounters[#MapManager.encounters + 1] = {
         x = obj.x, y = obj.y, w = obj.width, h = obj.height,
         table_id = props["table"],
+      }
+
+    elseif obj.type == "enemy" then
+      MapManager.enemies[#MapManager.enemies + 1] = {
+        x             = obj.x,
+        y             = obj.y,
+        creature_id   = props.creature_id or "gleamfin",
+        patrol_radius = props.patrol_radius or 80,
       }
     end
   end

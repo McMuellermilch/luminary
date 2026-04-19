@@ -214,13 +214,27 @@ return {
             target_spawn = "from_marsh",
           }
         },
-        -- Encounter zone: central marsh grass (willowfen_marsh table)
+        -- Enemies: three marsh creatures patrolling the central area
         {
-          id = 6, name = "marsh_encounter", type = "encounter",
+          id = 7, name = "gleamfin_1", type = "enemy",
           shape = "rectangle",
-          x = 64, y = 64, width = 576, height = 448,
+          x = 192, y = 160, width = 32, height = 32,
           rotation = 0, visible = true,
-          properties = { ["table"] = "willowfen_marsh" }
+          properties = { creature_id = "gleamfin", patrol_radius = 90 }
+        },
+        {
+          id = 8, name = "mossling_1", type = "enemy",
+          shape = "rectangle",
+          x = 448, y = 288, width = 32, height = 32,
+          rotation = 0, visible = true,
+          properties = { creature_id = "mossling", patrol_radius = 70 }
+        },
+        {
+          id = 9, name = "gleamfin_2", type = "enemy",
+          shape = "rectangle",
+          x = 544, y = 160, width = 32, height = 32,
+          rotation = 0, visible = true,
+          properties = { creature_id = "gleamfin", patrol_radius = 80 }
         },
       }
     }

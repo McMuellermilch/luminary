@@ -2,13 +2,14 @@
 -- Inherits from Entity. Uses Physics, Animation, Facing, and Health components.
 -- Phase 5 will wire Health into the combat system.
 
-local Entity    = require("src.entities.entity")
-local Physics   = require("src.entities.components.physics")
-local AnimComp  = require("src.entities.components.animation")
-local Facing    = require("src.entities.components.facing")
-local Health    = require("src.entities.components.health")
-local Aseprite  = require("src.core.aseprite")
-local Input     = require("src.core.input")
+local Entity     = require("src.entities.entity")
+local Physics    = require("src.entities.components.physics")
+local AnimComp   = require("src.entities.components.animation")
+local Facing     = require("src.entities.components.facing")
+local Health     = require("src.entities.components.health")
+local ChargeRing = require("src.entities.components.chargering")
+local Aseprite   = require("src.core.aseprite")
+local Input      = require("src.core.input")
 local MapManager = require("src.world.mapmanager")
 
 local Player = setmetatable({}, { __index = Entity })
@@ -50,8 +51,15 @@ function Player.new(x, y)
   local facing = Facing.new("down")
   self:addComponent("facing", facing)
 
-  -- Health — Luma's HP (used in Phase 5 combat)
+  -- Health
   self:addComponent("health", Health.new(10))
+
+  -- ChargeRing — attack charge visualisation
+  self:addComponent("chargering", ChargeRing.new())
+  self._attack_held = false
+
+  -- Set by update() when an attack is released; consumed by Overworld.
+  self.pending_attack = nil
 
   return self
 end
@@ -78,6 +86,18 @@ function Player:update(dt)
   -- Update animation clock
   self:getComponent("animation"):update(dt)
 
+  -- Charge ring
+  local ring = self:getComponent("chargering")
+  if Input.isDown("attack") then
+    if not ring.charging then ring:startCharge() end
+    self._attack_held = true
+  elseif self._attack_held then
+    self._attack_held = false
+    local charge = ring:release()
+    self.pending_attack = { charge = charge, dir = self:getComponent("facing").direction }
+  end
+  ring:update(dt)
+
   -- Interaction
   if Input.wasPressed("confirm") then
     self:_interact()
@@ -86,6 +106,7 @@ end
 
 function Player:draw()
   self:getComponent("animation"):draw()
+  self:getComponent("chargering"):draw()
 end
 
 -- Returns the world-space centre of the player (used by camera and WarpSystem).
