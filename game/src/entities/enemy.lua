@@ -32,6 +32,13 @@ function Enemy.new(data)
   self.type = "enemy"
   self.name = def.name or "Enemy"
 
+  -- Creature identity (used by CaptureSystem)
+  self.creature_id         = data.creature_id or "gleamfin"
+  self.creature_type       = def.type or "unknown"
+  self.is_boss             = data.is_boss or false
+  self.capture_difficulty  = def.capture_difficulty or 1
+  self.capture_level       = data.level or 1   -- level at which it was spawned
+
   -- AI parameters (read by EnemyAI module)
   self.spawn_x         = x
   self.spawn_y         = y

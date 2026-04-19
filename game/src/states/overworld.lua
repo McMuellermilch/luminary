@@ -13,6 +13,9 @@ local WarpSystem     = require("src.world.warpsystem")
 local EntityManager  = require("src.entities.entitymanager")
 local PartyManager   = require("src.creatures.partymanager")
 local Events         = require("src.core.events")
+local Items          = require("src.data.items")
+local CaptureSystem  = require("src.systems.capturesystem")
+local TrustMeter     = require("src.ui.trustmeter")
 
 local Overworld = {}
 Overworld.__index = Overworld
@@ -121,6 +124,9 @@ function Overworld:enter(params)
   self._enemy_hitboxes  = {}   -- { x,y,w,h,damage,lifetime }
   self._hit_flashes     = {}   -- { x,y,w,h,timer } — brief white rectangles
 
+  -- Capture state (nil when inactive)
+  self._capture = nil          -- { enemy, meter, reject_msg, reject_timer }
+
   WarpSystem.reset()
 end
 
@@ -144,6 +150,9 @@ function Overworld:_reload(map_path, spawn_id)
   self._player_hitboxes = {}
   self._enemy_hitboxes  = {}
   self._hit_flashes     = {}
+
+  -- Reset capture state
+  self._capture = nil
 
   WarpSystem.reset()
 end
@@ -233,10 +242,121 @@ function Overworld:_addFlash(cx, cy)
 end
 
 -- -------------------------------------------------------------------------
+-- Find the nearest active enemy within `range` pixels of the player centre.
+-- -------------------------------------------------------------------------
+function Overworld:_findCaptureTarget(range)
+  local pcx, pcy = self.player:center()
+  local best, best_dist = nil, range * range
+  for _, enemy in ipairs(self._enemies) do
+    if enemy.active then
+      local eh = enemy:getComponent("health")
+      if not eh:isDead() then
+        local ecx = enemy.x + enemy.w / 2
+        local ecy = enemy.y + enemy.h / 2
+        local dx  = ecx - pcx
+        local dy  = ecy - pcy
+        local d2  = dx * dx + dy * dy
+        if d2 <= best_dist then
+          best      = enemy
+          best_dist = d2
+        end
+      end
+    end
+  end
+  return best
+end
+
+-- Choose the best available lantern for the given enemy.
+-- Prefers standard lanterns; falls back to duskglass for void types.
+-- Returns item_id string, or nil if none available.
+local function pick_lantern(enemy)
+  if enemy.creature_type == "void" then
+    if PartyManager.itemCount("duskglass_lantern") > 0 then
+      return "duskglass_lantern"
+    end
+    return nil
+  end
+  if PartyManager.itemCount("warmglass_lantern") > 0 then
+    return "warmglass_lantern"
+  end
+  if PartyManager.itemCount("lightglass_lantern") > 0 then
+    return "lightglass_lantern"
+  end
+  return nil
+end
+
+-- Attempt to throw a lantern at the nearest enemy in range.
+function Overworld:_throwLantern()
+  local enemy = self:_findCaptureTarget(90)
+  if not enemy then return end  -- no target in range
+
+  local item_id = pick_lantern(enemy)
+  if not item_id then
+    -- Out of lanterns
+    self._capture = { reject_msg = "No lanterns left!", reject_timer = 1.5 }
+    return
+  end
+
+  local item = Items[item_id]
+  local ok, reason = CaptureSystem.canCapture(enemy, item)
+  if not ok then
+    self._capture = { reject_msg = reason, reject_timer = 1.5 }
+    return
+  end
+
+  -- Consume the lantern regardless of outcome
+  PartyManager.consumeItem(item_id)
+
+  local trust = CaptureSystem.calcTrust(enemy, item)
+  self._capture = {
+    enemy = enemy,
+    meter = TrustMeter.new(trust, enemy, self.camera),
+  }
+end
+
+-- Resolve a completed capture attempt.
+function Overworld:_resolveCapture()
+  local cap = self._capture
+  self._capture = nil
+
+  if not cap.enemy then return end   -- was a reject-message capture, nothing to resolve
+
+  if cap.meter.success then
+    -- Remove from enemy tracking list before destroy
+    for i, e in ipairs(self._enemies) do
+      if e == cap.enemy then table.remove(self._enemies, i); break end
+    end
+    CaptureSystem.finalize(cap.enemy)
+    cap.enemy:destroy()
+  end
+  -- On failure: enemy remains, already de-paused by clearing _capture
+end
+
+-- -------------------------------------------------------------------------
 function Overworld:update(dt)
   if Input.wasPressed("pause") then
     local StateManager = require("src.states.statemanager")
     StateManager.pop()
+    return
+  end
+
+  -- Capture freeze: world paused while trust meter animates
+  if self._capture then
+    if self._capture.reject_timer then
+      -- Brief reject message — just count down
+      self._capture.reject_timer = self._capture.reject_timer - dt
+      if self._capture.reject_timer <= 0 then self._capture = nil end
+    else
+      -- Animate trust meter
+      self._capture.meter:update(dt)
+      if self._capture.meter.done then
+        self:_resolveCapture()
+      end
+    end
+    -- Still update camera during freeze
+    local cx, cy = self.player:center()
+    self.camera:follow(cx, cy)
+    self.camera:update(dt)
     return
   end
 
@@ -248,6 +368,18 @@ function Overworld:update(dt)
     self.camera:follow(cx, cy)
     self.camera:update(dt)
     return
+  end
+
+  -- Throw lantern (capture attempt)
+  if Input.wasPressed("throw_lantern") then
+    self:_throwLantern()
+    if self._capture then
+      -- Pause started; skip rest of update this frame
+      local cx, cy = self.player:center()
+      self.camera:follow(cx, cy)
+      self.camera:update(dt)
+      return
+    end
   end
 
   MapManager.update(dt)
@@ -302,6 +434,20 @@ function Overworld:draw()
   self.camera:detach()
   self.camera:draw()
 
+  -- Capture UI (screen space, after camera detach)
+  if self._capture then
+    if self._capture.meter then
+      self._capture.meter:draw()
+    elseif self._capture.reject_msg then
+      -- Brief rejection message centred on screen
+      love.graphics.setColor(0.9, 0.2, 0.2, 0.9)
+      love.graphics.rectangle("fill", 440, 160, 400, 28, 4, 4)
+      love.graphics.setColor(1, 1, 1, 1)
+      love.graphics.setFont(get_debug_font())
+      love.graphics.printf(self._capture.reject_msg, 440, 168, 400, "center")
+    end
+  end
+
   -- Debug HUD
   local active = PartyManager.getActive()
   local lumin_str = active
@@ -310,13 +456,17 @@ function Overworld:draw()
       active.hp, active.max_hp,
       active.exp, active.exp_to_next)
     or ""
+  local lantern_count = PartyManager.itemCount("lightglass_lantern")
+    + PartyManager.itemCount("warmglass_lantern")
+    + PartyManager.itemCount("duskglass_lantern")
+  local lantern_str = string.format("  |  Lanterns:%d  [Q=throw]", lantern_count)
   love.graphics.setColor(0, 0, 0, 0.5)
-  love.graphics.rectangle("fill", 0, 0, 540, 36)
+  love.graphics.rectangle("fill", 0, 0, 720, 36)
   love.graphics.setColor(1, 1, 1, 0.9)
   love.graphics.setFont(get_debug_font())
   love.graphics.print(
-    string.format("x:%.0f y:%.0f  facing:%s  [Esc=menu]%s",
-      self.player.x, self.player.y, self.player:getFacing(), lumin_str),
+    string.format("x:%.0f y:%.0f  facing:%s  [Esc=menu]%s%s",
+      self.player.x, self.player.y, self.player:getFacing(), lumin_str, lantern_str),
     6, 10)
   love.graphics.setColor(1, 1, 1, 1)
 end

@@ -17,7 +17,8 @@ local key_bindings = {
   ability1   = {"x"},
   ability2   = {"a"},
   swap       = {"s"},
-  pause      = {"escape"},
+  pause         = {"escape"},
+  throw_lantern = {"q"},
 }
 
 -- Action → gamepad button bindings
